@@ -10,11 +10,17 @@
             </div>
             <div class="quick-actions-scroll scrollbar-outer">
                 <div class="quick-actions-items">
-                    <form action="/cup/task/run" method="post" class="row m-0" onsubmit="return confirm('Процесс обновления каталога займет какое-то время! Пожалуйста, убедитесь, что в данный момент не запущен другой процесс обновления! Вы действительно хотите выполнить сейчас?');">
-                        <button type="submit" name="task" value="Plugin\TradeMaster\Tasks\CatalogSyncTask" class="col-12 col-md-12 p-0 btn btn-link">
+                    <form action="/cup/task/run" method="post" class="row m-0" onsubmit="return confirm('Вы действительно хотите выполнить это действие сейчас?');">
+                        <button type="submit" name="task" value="Plugin\TradeMaster\Tasks\CatalogDownloadTask" class="col-12 col-md-6 p-0 btn btn-link">
                             <div class="quick-actions-item">
-                                <i class="fas fa-store"></i>
-                                <span class="text">Обновить каталог</span>
+                                <i class="fas fa-download"></i>
+                                <span class="text">Загрузить из ТМ</span>
+                            </div>
+                        </button>
+                        <button type="submit" name="task" value="Plugin\TradeMaster\Tasks\CatalogUploadTask" class="col-12 col-md-6 p-0 btn btn-link">
+                            <div class="quick-actions-item">
+                                <i class="fas fa-upload"></i>
+                                <span class="text">Выгрузить в ТМ</span>
                             </div>
                         </button>
                     </form>

@@ -5,8 +5,10 @@ namespace Plugin\TradeMaster\Tasks;
 use Alksily\Entity\Collection;
 use App\Domain\Tasks\Task;
 
-class CatalogSyncTask extends Task
+class CatalogDownloadTask extends Task
 {
+    public const TITLE = 'Загрузка каталога ТМ';
+
     public function execute(array $params = []): \App\Domain\Entities\Task
     {
         $default = [
@@ -31,6 +33,11 @@ class CatalogSyncTask extends Task
      * @var \Doctrine\Common\Persistence\ObjectRepository|\Doctrine\ORM\EntityRepository
      */
     protected $productRepository;
+
+    /**
+     * @var array
+     */
+    private $downloadImages = [];
 
     /**
      * @throws \RunTracy\Helpers\Profiler\Exception\ProfilerException
@@ -64,6 +71,12 @@ class CatalogSyncTask extends Task
             \RunTracy\Helpers\Profiler\Profiler::start('task:tm:remove');
             $this->remove($catalog['categories'], $catalog['products']);
             \RunTracy\Helpers\Profiler\Profiler::finish('task:tm:remove');
+
+            if ($this->downloadImages) {
+                // загрузка картинок
+                $task = new \Plugin\TradeMaster\Tasks\DownloadImageTask($this->container);
+                $task->execute(['list' => $this->downloadImages]);
+            }
 
             $this->setStatusDone();
         } catch (\Exception $exception) {
@@ -119,8 +132,7 @@ class CatalogSyncTask extends Task
                 $this->entityManager->persist($model);
 
                 if ($this->getParameter('file_is_enabled', 'no') === 'yes') {
-                    $task = new \Plugin\TradeMaster\Tasks\DownloadImageTask($this->container);
-                    $task->execute(['photo' => $item['foto'], 'type' => 'category', 'uuid' => $model->uuid->toString()]);
+                    $this->downloadImages[] = ['photo' => $item['foto'], 'type' => 'category', 'uuid' => $model->uuid->toString()];
                 }
             } else {
                 $this->logger->warning('TradeMaster: invalid category data', $result);
@@ -162,7 +174,7 @@ class CatalogSyncTask extends Task
         if ($count) {
             $count = (int)$count['count'];
             $i = 0;
-            $step = 250;
+            $step = 200;
             $go = true;
 
             // получаем данные
@@ -181,22 +193,22 @@ class CatalogSyncTask extends Task
                     $data = [
                         'external_id' => $item['idTovar'],
                         'category' => \Ramsey\Uuid\Uuid::NIL,
-                        'title' => $item['name'],
+                        'title' => trim($item['name']),
                         'order' => $item['poryadok'],
-                        'description' => urldecode($item['opisanie']),
-                        'extra' => urldecode($item['opisanieDop']),
+                        'description' => trim(urldecode($item['opisanie'])),
+                        'extra' => trim(urldecode($item['opisanieDop'])),
                         'address' => $item['link'],
                         'field1' => $item['ind1'],
                         'field2' => $item['ind2'],
                         'field3' => $item['ind3'],
-                        'field4' => $item['ind3'],
-                        'field5' => $item['ind3'],
+                        'field4' => $item['ind4'],
+                        'field5' => $item['ind5'],
                         'vendorcode' => $item['artikul'],
                         'barcode' => $item['strihKod'],
                         'priceFirst' => $item['sebestomost'],
                         'price' => $item['price'],
                         'priceWholesale' => $item['opt_price'],
-                        'unit' => $item['edIzmer'],
+                        'unit' => rtrim($item['edIzmer'], '.'),
                         'volume' => $item['ves'],
                         'country' => $item['strana'],
                         'manufacturer' => $item['proizv'],
@@ -235,15 +247,16 @@ class CatalogSyncTask extends Task
                         $this->entityManager->persist($model);
 
                         if ($item['foto'] && $this->getParameter('file_is_enabled', 'no') === 'yes') {
-                            $task = new \Plugin\TradeMaster\Tasks\DownloadImageTask($this->container);
-                            $task->execute(['photo' => $item['foto'], 'type' => 'product', 'uuid' => $model->uuid->toString()]);
+                            $this->downloadImages[] = ['photo' => $item['foto'], 'type' => 'product', 'uuid' => $model->uuid->toString()];
                         }
                     } else {
                         $this->logger->warning('TradeMaster: invalid product data', $result);
                     }
                 }
 
-                $go = $step * ++$i <= $count;
+                $i++;
+                $go = $step * $i <= $count;
+                $this->setProgress($step * $i, $count);
             }
         };
     }

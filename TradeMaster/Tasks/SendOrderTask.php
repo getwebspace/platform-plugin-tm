@@ -6,6 +6,8 @@ use App\Domain\Tasks\Task;
 
 class SendOrderTask extends Task
 {
+    public const TITLE = 'Отправка заказа в ТМ';
+
     public function execute(array $params = []): \App\Domain\Entities\Task
     {
         $default = [

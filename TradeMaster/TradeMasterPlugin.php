@@ -14,6 +14,7 @@ class TradeMasterPlugin extends Plugin
     const DESCRIPTION = "Плагин реализует функционал интеграции с системой торгово-складского учета.";
     const AUTHOR      = "Aleksey Ilyin";
     const AUTHOR_SITE = "https://u4et.ru/trademaster";
+    const VERSION     = "1.1";
 
     public function __construct(ContainerInterface $container)
     {
@@ -197,6 +198,8 @@ class TradeMasterPlugin extends Plugin
         ];
         $data = array_merge($default, $data);
         $data['method'] = strtoupper($data['method']);
+
+        $this->logger->info('TradeMaster: API access', ['endpoint' => $data['endpoint']]);
 
         if (($key = $this->container->get('parameter')->get('TradeMasterPlugin_key', null)) != null) {
             $pathParts = [$this->container->get('parameter')->get('TradeMasterPlugin_host'), 'v' . $this->container->get('parameter')->get('TradeMasterPlugin_version'), $data['endpoint']];
