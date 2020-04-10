@@ -174,7 +174,7 @@ class CatalogDownloadTask extends Task
         if ($count) {
             $count = (int)$count['count'];
             $i = 0;
-            $step = 200;
+            $step = 100;
             $go = true;
 
             // получаем данные

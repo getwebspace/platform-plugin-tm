@@ -12,7 +12,7 @@ class CatalogUploadTask extends Task
     public function execute(array $params = []): \App\Domain\Entities\Task
     {
         $default = [
-            // nothing
+            'only_updated' => false,
         ];
         $params = array_merge($default, $params);
 
@@ -42,8 +42,24 @@ class CatalogUploadTask extends Task
             'status' => \App\Domain\Types\Catalog\ProductStatusType::STATUS_WORK,
         ]));
 
-        $step = 200;
+        if ($args['only_updated'] === true) {
+            $buf = [];
+            $now = (new \DateTime('now'))->modify('-5 minutes');
+
+            /** @var \App\Domain\Entities\Catalog\Product $product */
+            foreach ($products as $product) {
+                if ($product->date > $now) {
+                    $buf[] = $product;
+                }
+            }
+
+            $products = collect($buf);
+            $this->logger->info('TradeMaster: upload only updated products', ['count' => $products->count()]);
+        }
+
+        $step = 100;
         foreach ($products->chunk($step) as $index => $chunk) {
+            $this->setProgress($index, $products->count() / $step);
             $response = $this->trademaster->api([
                 'method' => 'POST',
                 'endpoint' => 'item/updateTovarSite',
@@ -52,9 +68,6 @@ class CatalogUploadTask extends Task
                 ],
             ]);
             $this->logger->info('TradeMaster: upload catalog data', ['response' => $response, 'xml' => $this->getPruductXML($chunk)]);
-
-            return $this->setStatusDone();
-            $this->setProgress($index, $products->count() / $step);
         }
 
         $this->setStatusDone();
@@ -102,7 +115,6 @@ class CatalogUploadTask extends Task
             <strana>' . $product->country . '</strana>
         </ProductAttributeValue>
     </ProductAttribute>';
-            break;
         }
 
         $output .= "</Attributes>";

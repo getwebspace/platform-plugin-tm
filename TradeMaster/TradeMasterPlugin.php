@@ -9,19 +9,23 @@ use Slim\Http\Response;
 
 class TradeMasterPlugin extends Plugin
 {
-    const NAME        = "TradeMasterPlugin";
-    const TITLE       = "TradeMaster";
-    const DESCRIPTION = "Плагин реализует функционал интеграции с системой торгово-складского учета.";
-    const AUTHOR      = "Aleksey Ilyin";
-    const AUTHOR_SITE = "https://u4et.ru/trademaster";
-    const VERSION     = "1.1";
+    const NAME = 'TradeMasterPlugin';
+    const TITLE = 'TradeMaster';
+    const DESCRIPTION = 'Плагин реализует функционал интеграции с системой торгово-складского учета.';
+    const AUTHOR = 'Aleksey Ilyin';
+    const AUTHOR_SITE = 'https://u4et.ru/trademaster';
+    const VERSION = '1.1';
 
     public function __construct(ContainerInterface $container)
     {
         parent::__construct($container);
 
         $this->setTemplateFolder(__DIR__ . '/templates');
-        $this->setHandledRoute('catalog:cart');
+        $this->setHandledRoute(
+            'catalog:cart',
+            'cup:catalog:product:edit',
+            'cup:catalog:data:import'
+        );
         $this->addTwigExtension(\Plugin\TradeMaster\TradeMasterPluginTwigExt::class);
         $this->addToolbarItem(['twig' => 'trademaster.twig']);
         $this->addSettingsField([
@@ -148,18 +152,25 @@ class TradeMasterPlugin extends Plugin
                 'placeholder' => 'catalog.mail.client.twig',
             ],
         ]);
-    }
-
-    public function before(Request $request, Response $response, string $routeName): Response
-    {
-        return $response;
+        $this->addSettingsField([
+            'label' => 'Обновлять продукты в TM',
+            'description' => 'Выгружать продукты автоматически после каждого изменения',
+            'type' => 'select',
+            'name' => 'auto_update',
+            'args' => [
+                'selected' => 'off',
+                'option' => [
+                    'off' => 'Нет',
+                    'on' => 'Да',
+                ],
+            ],
+        ]);
     }
 
     public function after(Request $request, Response $response, string $routeName): Response
     {
         switch ($routeName) {
             case 'catalog:cart':
-            {
                 if ($request->isPost()) {
                     $orderRepository = $this->entityManager->getRepository(\App\Domain\Entities\Catalog\Order::class);
 
@@ -178,7 +189,15 @@ class TradeMasterPlugin extends Plugin
                     sleep(5); // костыль
                 }
                 break;
-            }
+
+            case 'cup:catalog:product:edit':
+            case 'cup:catalog:data:import':
+                if ($request->isPost() && $this->getParameter('TradeMasterPlugin_auto_update', 'off') === 'on') {
+                    // add task upload products
+                    $task = new \Plugin\TradeMaster\Tasks\CatalogUploadTask($this->container);
+                    $task->execute(['only_updated' => true]);
+                }
+                break;
         }
 
         return $response;
@@ -204,7 +223,7 @@ class TradeMasterPlugin extends Plugin
         if (($key = $this->container->get('parameter')->get('TradeMasterPlugin_key', null)) != null) {
             $pathParts = [$this->container->get('parameter')->get('TradeMasterPlugin_host'), 'v' . $this->container->get('parameter')->get('TradeMasterPlugin_version'), $data['endpoint']];
 
-            if ($data['method'] == "GET") {
+            if ($data['method'] == 'GET') {
                 $data['params']['apikey'] = $key;
                 $path = implode('/', $pathParts) . '?' . http_build_query($data['params']);
 
