@@ -55,35 +55,41 @@ class CatalogDownloadTask extends Task
             ])),
             'products' => collect($this->productRepository->findBy([
                 'export' => 'trademaster',
-                'status' => \App\Domain\Types\Catalog\ProductStatusType::STATUS_WORK
+                'status' => \App\Domain\Types\Catalog\ProductStatusType::STATUS_WORK,
             ])),
         ];
 
         try {
+            $this->setProgress(1);
             \RunTracy\Helpers\Profiler\Profiler::start('task:tm:category');
             $this->category($catalog['categories']);
             \RunTracy\Helpers\Profiler\Profiler::finish('task:tm:category');
 
+            $this->setProgress(33);
             \RunTracy\Helpers\Profiler\Profiler::start('task:tm:product');
             $this->product($catalog['categories'], $catalog['products']);
             \RunTracy\Helpers\Profiler\Profiler::finish('task:tm:product');
 
+            $this->setProgress(66);
             \RunTracy\Helpers\Profiler\Profiler::start('task:tm:remove');
             $this->remove($catalog['categories'], $catalog['products']);
             \RunTracy\Helpers\Profiler\Profiler::finish('task:tm:remove');
 
+            $this->setProgress(99);
             if ($this->downloadImages) {
                 // загрузка картинок
                 $task = new \Plugin\TradeMaster\Tasks\DownloadImageTask($this->container);
                 $task->execute(['list' => $this->downloadImages]);
             }
 
-            $this->setStatusDone();
+            $this->setProgress(100);
         } catch (\Exception $exception) {
-            $this->setStatusFail();
+            $this->logger->error($exception->getMessage(), ['file' => $exception->getFile(), 'trace' => $exception->getTraceAsString()]);
 
-            return;
+            return $this->setStatusFail();
         }
+
+        return $this->setStatusDone();
     }
 
     protected function category(Collection &$categories)
@@ -127,9 +133,9 @@ class CatalogDownloadTask extends Task
                 $model = $categories->firstWhere('external_id', $item['idZvena']);
                 if (!$model) {
                     $categories[] = $model = new \App\Domain\Entities\Catalog\Category();
+                    $this->entityManager->persist($model);
                 }
                 $model->replace($data);
-                $this->entityManager->persist($model);
 
                 if ($this->getParameter('file_is_enabled', 'no') === 'yes') {
                     $this->downloadImages[] = ['photo' => $item['foto'], 'type' => 'category', 'uuid' => $model->uuid->toString()];
@@ -172,7 +178,7 @@ class CatalogDownloadTask extends Task
         $count = $this->trademaster->api(['endpoint' => 'item/count']);
 
         if ($count) {
-            $count = (int)$count['count'];
+            $count = (int) $count['count'];
             $i = 0;
             $step = 100;
             $go = true;
@@ -213,7 +219,7 @@ class CatalogDownloadTask extends Task
                         'country' => $item['strana'],
                         'manufacturer' => $item['proizv'],
                         'tags' => $item['tags'],
-                        'date' => new \DateTime($item['changeDate']),
+                        'date' => new \DateTime(trim($item['changeDate'])),
                         'meta' => [
                             'title' => $item['name'],
                             'description' => strip_tags(urldecode($item['opisanie'])),
@@ -223,18 +229,19 @@ class CatalogDownloadTask extends Task
                         'buf' => 1,
                     ];
 
-                    /**
-                     * @var \App\Domain\Entities\Catalog\Category $category
-                     * @var \App\Domain\Entities\Catalog\Product $model
-                     */
-                    $model = $products->firstWhere('external_id', $item['idTovar']);
-                    if (!$model) {
-                        $products[] = $model = new \App\Domain\Entities\Catalog\Product();
-                    }
-
                     $result = \App\Domain\Filters\Catalog\Product::check($data);
 
                     if ($result === true) {
+                        /**
+                         * @var \App\Domain\Entities\Catalog\Category $category
+                         * @var \App\Domain\Entities\Catalog\Product  $model
+                         */
+                        $model = $products->firstWhere('external_id', $item['idTovar']);
+                        if (!$model) {
+                            $products[] = $model = new \App\Domain\Entities\Catalog\Product();
+                            $this->entityManager->persist($model);
+                        }
+
                         if (($category = $categories->firstWhere('external_id', $item['vStrukture'])) !== null) {
                             $data['category'] = $category->uuid;
 
@@ -244,7 +251,6 @@ class CatalogDownloadTask extends Task
                         }
 
                         $model->replace($data);
-                        $this->entityManager->persist($model);
 
                         if ($item['foto'] && $this->getParameter('file_is_enabled', 'no') === 'yes') {
                             $this->downloadImages[] = ['photo' => $item['foto'], 'type' => 'product', 'uuid' => $model->uuid->toString()];
@@ -256,42 +262,38 @@ class CatalogDownloadTask extends Task
 
                 $i++;
                 $go = $step * $i <= $count;
-                $this->setProgress($step * $i, $count);
             }
         };
     }
 
     protected function remove(Collection &$categories, Collection &$products)
     {
+        $this->logger->info('Task: TradeMaster remove old categories and products');
+
         // удаление моделей категорий которые не получили обновление в процессе синхронизации
         foreach ($categories->where('buf', null) as $model) {
-            /**
-             * @var \App\Domain\Entities\Catalog\Category $model
-             * @var \App\Domain\Entities\Catalog\Category $category
-             * @var \App\Domain\Entities\Catalog\Product  $product
-             */
+            /** @var \App\Domain\Entities\Catalog\Category $model */
             $childCategoriesUuid = \App\Domain\Entities\Catalog\Category::getChildren($categories, $model)->pluck('uuid')->all();
 
             // удаление вложенных категорий
             foreach ($categories->whereIn('uuid', $childCategoriesUuid) as $category) {
+                /** @var \App\Domain\Entities\Catalog\Category $category */
                 $category->set('status', \App\Domain\Types\Catalog\CategoryStatusType::STATUS_DELETE);
-                $this->entityManager->persist($category);
             }
 
             // удаление продуктов
             foreach ($products->whereIn('uuid', $childCategoriesUuid) as $product) {
+                /** @var \App\Domain\Entities\Catalog\Product $product */
                 $product->set('status', \App\Domain\Types\Catalog\ProductStatusType::STATUS_DELETE);
-                $this->entityManager->persist($product);
             }
 
             $model->set('status', \App\Domain\Types\Catalog\CategoryStatusType::STATUS_DELETE);
         }
 
         // удаление моделей продуктов которые не получили обновление в процессе синхронизации
-        foreach ($products->where('buf', null) as $model) {
-            /** @var \App\Domain\Entities\Catalog\Product $model */
-            $model->set('status', \App\Domain\Types\Catalog\ProductStatusType::STATUS_DELETE);
-            $this->entityManager->persist($model);
+        foreach ($products->where('status', \App\Domain\Types\Catalog\CategoryStatusType::STATUS_WORK)->where('buf', null) as $product) {
+            /** @var \App\Domain\Entities\Catalog\Product $product */
+            $product->set('status', \App\Domain\Types\Catalog\ProductStatusType::STATUS_DELETE);
         }
     }
 }
