@@ -84,7 +84,6 @@ class SendOrderTask extends Task
 
             if ($result && !empty($result['nomerZakaza'])) {
                 $order->external_id = $result['nomerZakaza'];
-                $this->entityManager->persist($order);
 
                 $products = collect($this->productRepository->findBy(['uuid' => array_keys($order->list)]));
 

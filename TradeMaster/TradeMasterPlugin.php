@@ -40,6 +40,20 @@ class TradeMasterPlugin extends Plugin
             ],
         ]);
         $this->addSettingsField([
+            'label' => 'Обновлять продукты в TM',
+            'description' => 'Выгружать продукты автоматически после каждого изменения',
+            'type' => 'select',
+            'name' => 'auto_update',
+            'args' => [
+                'selected' => 'off',
+                'option' => [
+                    'off' => 'Нет',
+                    'on' => 'Да',
+                ],
+            ],
+        ]);
+
+        $this->addSettingsField([
             'label' => 'API Host',
             'type' => 'text',
             'name' => 'host',
@@ -143,6 +157,7 @@ class TradeMasterPlugin extends Plugin
                 'value' => '0',
             ],
         ]);
+
         $this->addSettingsField([
             'label' => 'Шаблон письма клиенту',
             'description' => 'Если значения нет, письмо не будет отправляться',
@@ -150,19 +165,6 @@ class TradeMasterPlugin extends Plugin
             'name' => 'mail_client_template',
             'args' => [
                 'placeholder' => 'catalog.mail.client.twig',
-            ],
-        ]);
-        $this->addSettingsField([
-            'label' => 'Обновлять продукты в TM',
-            'description' => 'Выгружать продукты автоматически после каждого изменения',
-            'type' => 'select',
-            'name' => 'auto_update',
-            'args' => [
-                'selected' => 'off',
-                'option' => [
-                    'off' => 'Нет',
-                    'on' => 'Да',
-                ],
             ],
         ]);
     }

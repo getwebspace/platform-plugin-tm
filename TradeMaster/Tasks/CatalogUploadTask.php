@@ -42,6 +42,7 @@ class CatalogUploadTask extends Task
             'status' => \App\Domain\Types\Catalog\ProductStatusType::STATUS_WORK,
         ]));
 
+        // получение списка недавно обновленных товаров
         if ($args['only_updated'] === true) {
             $buf = [];
             $now = (new \DateTime('now'))->modify('-5 minutes');

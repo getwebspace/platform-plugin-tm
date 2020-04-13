@@ -81,9 +81,7 @@ class DownloadImageTask extends Task
 
                             if (($model = \App\Domain\Entities\File::getFromPath($path)) !== null) {
                                 $entity->addFile($model);
-
                                 $this->entityManager->persist($model);
-                                $this->entityManager->persist($entity);
 
                                 // is image
                                 if (\Alksily\Support\Str::start('image/', $model->type)) {
