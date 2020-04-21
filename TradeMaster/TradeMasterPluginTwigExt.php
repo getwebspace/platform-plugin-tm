@@ -33,7 +33,7 @@ class TradeMasterPluginTwigExt extends \Twig\Extension\AbstractExtension
     {
         \RunTracy\Helpers\Profiler\Profiler::start('twig:fn:tm_api');
 
-        $trademaster = $this->container->get('trademaster');
+        $trademaster = $this->container->get('TradeMasterPlugin');
         $result = $trademaster->api([
             'endpoint' => $endpoint,
             'params' => $params,
