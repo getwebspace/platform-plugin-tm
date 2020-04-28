@@ -82,6 +82,8 @@ class SendOrderTask extends Task
                 ],
             ]);
 
+            $this->logger->info('TradeBaster: send order', $result);
+
             if ($result && !empty($result['nomerZakaza'])) {
                 $order->external_id = $result['nomerZakaza'];
 

@@ -171,35 +171,37 @@ class TradeMasterPlugin extends Plugin
 
     public function after(Request $request, Response $response, string $routeName): Response
     {
-        switch ($routeName) {
-            case 'catalog:cart':
-                if ($request->isPost()) {
-                    $orderRepository = $this->entityManager->getRepository(\App\Domain\Entities\Catalog\Order::class);
+        if ($this->getParameter('TradeMasterPlugin_enable', 'off') === 'on') {
+            switch ($routeName) {
+                case 'catalog:cart':
+                    if ($request->isPost()) {
+                        $orderRepository = $this->entityManager->getRepository(\App\Domain\Entities\Catalog\Order::class);
 
-                    /** @var \App\Domain\Entities\Catalog\Order $model */
-                    foreach ($orderRepository->findBy(['external_id' => null], ['date' => 'desc'], 5) as $model) {
-                        // add task send to TradeMaster
-                        $task = new \Plugin\TradeMaster\Tasks\SendOrderTask($this->container);
-                        $task->execute(['uuid' => $model->uuid]);
+                        /** @var \App\Domain\Entities\Catalog\Order $model */
+                        foreach ($orderRepository->findBy(['external_id' => ''], ['date' => 'desc'], 5) as $model) {
+                            // add task send to TradeMaster
+                            $task = new \Plugin\TradeMaster\Tasks\SendOrderTask($this->container);
+                            $task->execute(['uuid' => $model->uuid]);
+                        }
+
+                        $this->entityManager->flush();
+
+                        // run worker
+                        \App\Domain\Tasks\Task::worker();
+
+                        sleep(5); // костыль
                     }
+                    break;
 
-                    $this->entityManager->flush();
-
-                    // run worker
-                    \App\Domain\Tasks\Task::worker();
-
-                    sleep(5); // костыль
-                }
-                break;
-
-            case 'cup:catalog:product:edit':
-            case 'cup:catalog:data:import':
-                if ($request->isPost() && $this->getParameter('TradeMasterPlugin_auto_update', 'off') === 'on') {
-                    // add task upload products
-                    $task = new \Plugin\TradeMaster\Tasks\CatalogUploadTask($this->container);
-                    $task->execute(['only_updated' => true]);
-                }
-                break;
+                case 'cup:catalog:product:edit':
+                case 'cup:catalog:data:import':
+                    if ($request->isPost() && $this->getParameter('TradeMasterPlugin_auto_update', 'off') === 'on') {
+                        // add task upload products
+                        $task = new \Plugin\TradeMaster\Tasks\CatalogUploadTask($this->container);
+                        $task->execute(['only_updated' => true]);
+                    }
+                    break;
+            }
         }
 
         return $response;
