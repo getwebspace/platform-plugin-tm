@@ -87,14 +87,16 @@ class SendOrderTask extends Task
 
                 $products = collect($this->productRepository->findBy(['uuid' => array_keys($order->list)]));
 
-                // письмо клиенту
+                // письмо
                 if (($tpl = $this->getParameter('TradeMasterPlugin_mail_client_template', '')) !== '') {
+                    $body = $this->render($tpl, ['order' => $order, 'products' => $products]);
+
                     if ($order->email) {
                         // add task send client mail
                         $task = new \App\Domain\Tasks\SendMailTask($this->container);
                         $task->execute([
                             'to' => $order->email,
-                            'body' => $this->render($tpl, ['order' => $order, 'products' => $products]),
+                            'body' => $body,
                             'isHtml' => true,
                         ]);
                     }
@@ -107,7 +109,7 @@ class SendOrderTask extends Task
                         $task = new \App\Domain\Tasks\SendMailTask($this->container);
                         $task->execute([
                             'to' => $users->pluck('email', 'username')->all(),
-                            'body' => $this->render($tpl, ['order' => $order, 'products' => $products]),
+                            'body' => $body,
                             'isHtml' => true,
                         ]);
                     }
