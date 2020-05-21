@@ -82,25 +82,35 @@ class SendOrderTask extends Task
                 ],
             ]);
 
-            $this->logger->info('TradeBaster: send order', $result);
-
             if ($result && !empty($result['nomerZakaza'])) {
                 $order->external_id = $result['nomerZakaza'];
 
                 $products = collect($this->productRepository->findBy(['uuid' => array_keys($order->list)]));
 
                 // письмо клиенту
-                if (
-                    $order->email &&
-                    ($tpl = $this->getParameter('TradeMasterPlugin_mail_client_template', '')) !== ''
-                ) {
-                    // add task send client mail
-                    $task = new \App\Domain\Tasks\SendMailTask($this->container);
-                    $task->execute([
-                        'to' => $order->email,
-                        'body' => $this->render($tpl, ['order' => $order, 'products' => $products]),
-                        'isHtml' => true,
-                    ]);
+                if (($tpl = $this->getParameter('TradeMasterPlugin_mail_client_template', '')) !== '') {
+                    if ($order->email) {
+                        // add task send client mail
+                        $task = new \App\Domain\Tasks\SendMailTask($this->container);
+                        $task->execute([
+                            'to' => $order->email,
+                            'body' => $this->render($tpl, ['order' => $order, 'products' => $products]),
+                            'isHtml' => true,
+                        ]);
+                    }
+
+                    $userRepository = $this->entityManager->getRepository(\App\Domain\Entities\User::class);
+                    $users = collect($userRepository->findBy(['level' => \App\Domain\Types\UserLevelType::LEVEL_ADMIN, 'allow_mail' => 1]));
+
+                    if ($users->count()) {
+                        // add task send admin mail
+                        $task = new \App\Domain\Tasks\SendMailTask($this->container);
+                        $task->execute([
+                            'to' => $users->pluck('email', 'username')->all(),
+                            'body' => $this->render($tpl, ['order' => $order, 'products' => $products]),
+                            'isHtml' => true,
+                        ]);
+                    }
                 }
 
                 return $this->setStatusDone();
