@@ -108,7 +108,7 @@ class SendOrderTask extends Task
                         // add task send admin mail
                         $task = new \App\Domain\Tasks\SendMailTask($this->container);
                         $task->execute([
-                            'to' => $users->pluck('email', 'username')->all(),
+                            'to' => $users->pluck('username', 'email')->all(),
                             'body' => $body,
                             'isHtml' => true,
                         ]);
