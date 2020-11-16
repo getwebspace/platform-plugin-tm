@@ -1,20 +1,20 @@
-<?php
+<?php declare(strict_types=1);
 
 namespace Plugin\TradeMaster;
 
-use App\Application\Plugin;
+use App\Domain\AbstractPlugin;
 use Psr\Container\ContainerInterface;
 use Slim\Http\Request;
 use Slim\Http\Response;
 
-class TradeMasterPlugin extends Plugin
+class TradeMasterPlugin extends AbstractPlugin
 {
     const NAME = 'TradeMasterPlugin';
     const TITLE = 'TradeMaster';
     const DESCRIPTION = 'Плагин реализует функционал интеграции с системой торгово-складского учета.';
     const AUTHOR = 'Aleksey Ilyin';
     const AUTHOR_SITE = 'https://u4et.ru/trademaster';
-    const VERSION = '1.1';
+    const VERSION = '2.0';
 
     public function __construct(ContainerInterface $container)
     {
@@ -171,37 +171,37 @@ class TradeMasterPlugin extends Plugin
 
     public function after(Request $request, Response $response, string $routeName): Response
     {
-        if ($this->getParameter('TradeMasterPlugin_enable', 'off') === 'on') {
-            switch ($routeName) {
-                case 'catalog:cart':
-                    if ($request->isPost()) {
-                        $orderRepository = $this->entityManager->getRepository(\App\Domain\Entities\Catalog\Order::class);
+        switch ($routeName) {
+            case 'catalog:cart':
+                if ($request->isPost()) {
+                    $orderRepository = $this->entityManager->getRepository(\App\Domain\Entities\Catalog\Order::class);
 
-                        /** @var \App\Domain\Entities\Catalog\Order $model */
-                        foreach ($orderRepository->findBy(['external_id' => ''], ['date' => 'desc'], 5) as $model) {
-                            // add task send to TradeMaster
-                            $task = new \Plugin\TradeMaster\Tasks\SendOrderTask($this->container);
-                            $task->execute(['uuid' => $model->uuid]);
-                        }
-
-                        $this->entityManager->flush();
-
-                        // run worker
-                        \App\Domain\Tasks\Task::worker();
-
-                        sleep(5); // костыль
+                    /** @var \App\Domain\Entities\Catalog\Order $model */
+                    foreach ($orderRepository->findBy(['external_id' => null], ['date' => 'desc'], 5) as $model) {
+                        // add task send to TradeMaster
+                        $task = new \Plugin\TradeMaster\Tasks\SendOrderTask($this->container);
+                        $task->execute(['uuid' => $model->uuid]);
                     }
-                    break;
 
-                case 'cup:catalog:product:edit':
-                case 'cup:catalog:data:import':
-                    if ($request->isPost() && $this->getParameter('TradeMasterPlugin_auto_update', 'off') === 'on') {
-                        // add task upload products
-                        $task = new \Plugin\TradeMaster\Tasks\CatalogUploadTask($this->container);
-                        $task->execute(['only_updated' => true]);
-                    }
-                    break;
-            }
+                    $this->entityManager->flush();
+
+                    // run worker
+                    \App\Domain\AbstractTask::worker();
+
+                    sleep(5); // костыль
+                }
+
+                break;
+
+            case 'cup:catalog:product:edit':
+            case 'cup:catalog:data:import':
+                if ($request->isPost() && $this->parameter('TradeMasterPlugin_auto_update', 'off') === 'on') {
+                    // add task upload products
+                    $task = new \Plugin\TradeMaster\Tasks\CatalogUploadTask($this->container);
+                    $task->execute(['only_updated' => true]);
+                }
+
+                break;
         }
 
         return $response;
@@ -220,14 +220,18 @@ class TradeMasterPlugin extends Plugin
             'method' => 'GET',
         ];
         $data = array_merge($default, $data);
-        $data['method'] = strtoupper($data['method']);
+        $data['method'] = mb_strtoupper($data['method']);
 
         $this->logger->info('TradeMaster: API access', ['endpoint' => $data['endpoint']]);
 
-        if (($key = $this->container->get('parameter')->get('TradeMasterPlugin_key', null)) != null) {
-            $pathParts = [$this->container->get('parameter')->get('TradeMasterPlugin_host'), 'v' . $this->container->get('parameter')->get('TradeMasterPlugin_version'), $data['endpoint']];
+        if (($key = $this->parameter('TradeMasterPlugin_key')) !== null) {
+            $pathParts = [
+                $this->parameter('TradeMasterPlugin_host'),
+                'v' . $this->parameter('TradeMasterPlugin_version'),
+                $data['endpoint'],
+            ];
 
-            if ($data['method'] == 'GET') {
+            if ($data['method'] === 'GET') {
                 $data['params']['apikey'] = $key;
                 $path = implode('/', $pathParts) . '?' . http_build_query($data['params']);
 
@@ -236,13 +240,12 @@ class TradeMasterPlugin extends Plugin
                 $path = implode('/', $pathParts) . '?' . http_build_query(['apikey' => $key]);
 
                 $result = file_get_contents($path, false, stream_context_create([
-                    'http' =>
-                        [
-                            'method' => 'POST',
-                            'header' => 'Content-type: application/x-www-form-urlencoded',
-                            'content' => http_build_query($data['params']),
-                            'timeout' => 60,
-                        ],
+                    'http' => [
+                        'method' => 'POST',
+                        'header' => 'Content-type: application/x-www-form-urlencoded',
+                        'content' => http_build_query($data['params']),
+                        'timeout' => 60,
+                    ],
                 ]));
             }
 
@@ -262,10 +265,10 @@ class TradeMasterPlugin extends Plugin
     public function getFilePath(string $name)
     {
         $entities = ['%20', '%21', '%2A', '%27', '%28', '%29', '%3B', '%3A', '%40', '%26', '%3D', '%2B', '%24', '%2C', '%2F', '%3F', '%25', '%23', '%5B', '%5D'];
-        $replacements = [' ', '!', '*', "'", "(", ")", ";", ":", "@", "&", "=", "+", "$", ",", "/", "?", "%", "#", "[", "]"];
+        $replacements = [' ', '!', '*', "'", '(', ')', ';', ':', '@', '&', '=', '+', '$', ',', '/', '?', '%', '#', '[', ']'];
 
         $name = str_replace($entities, $replacements, urlencode($name));
 
-        return $this->container->get('parameter')->get('TradeMasterPlugin_cache_host') . '/tradeMasterImages/' . $this->container->get('parameter')->get('TradeMasterPlugin_cache_folder') . '/' . trim($name);
+        return $this->parameter('TradeMasterPlugin_cache_host') . '/tradeMasterImages/' . $this->parameter('TradeMasterPlugin_cache_folder') . '/' . trim($name);
     }
 }

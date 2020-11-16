@@ -1,22 +1,11 @@
-<?php
+<?php declare(strict_types=1);
 
 namespace Plugin\TradeMaster;
 
-use App\Application\Plugin;
-use Psr\Container\ContainerInterface;
+use App\Domain\AbstractExtension;
 
-class TradeMasterPluginTwigExt extends \Twig\Extension\AbstractExtension
+class TradeMasterPluginTwigExt extends AbstractExtension
 {
-    /**
-     * @var ContainerInterface
-     */
-    protected $container;
-
-    public function __construct(ContainerInterface $container)
-    {
-        $this->container = $container;
-    }
-
     public function getName()
     {
         return 'tm_plugin';
@@ -33,7 +22,7 @@ class TradeMasterPluginTwigExt extends \Twig\Extension\AbstractExtension
     {
         \RunTracy\Helpers\Profiler\Profiler::start('twig:fn:tm_api');
 
-        $trademaster = $this->container->get('TradeMasterPlugin');
+        $trademaster = $this->container->get('trademaster');
         $result = $trademaster->api([
             'endpoint' => $endpoint,
             'params' => $params,

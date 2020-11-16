@@ -1,10 +1,14 @@
-<?php
+<?php declare(strict_types=1);
 
 namespace Plugin\TradeMaster\Tasks;
 
-use App\Domain\Tasks\Task;
+use App\Domain\AbstractTask;
+use App\Domain\Service\Catalog\CategoryService;
+use App\Domain\Service\Catalog\ProductService;
+use App\Domain\Service\File\FileService;
+use Plugin\TradeMaster\TradeMasterPlugin;
 
-class DownloadImageTask extends Task
+class DownloadImageTask extends AbstractTask
 {
     public const TITLE = 'Загрузка изображений из ТМ';
 
@@ -25,38 +29,38 @@ class DownloadImageTask extends Task
     }
 
     /**
-     * @var \Plugin\TradeMaster\TradeMasterPlugin
+     * @var TradeMasterPlugin
      */
-    protected $trademaster;
+    protected TradeMasterPlugin $trademaster;
 
     /**
-     * @var \Doctrine\Common\Persistence\ObjectRepository|\Doctrine\ORM\EntityRepository
+     * @var CategoryService
      */
-    private $catalogCategoryRepository;
+    protected CategoryService $categoryService;
 
     /**
-     * @var \Doctrine\Common\Persistence\ObjectRepository|\Doctrine\ORM\EntityRepository
+     * @var ProductService
      */
-    private $catalogProductRepository;
+    protected ProductService $productService;
 
     /**
-     * @var \Doctrine\Common\Persistence\ObjectRepository|\Doctrine\ORM\EntityRepository
+     * @var FileService
      */
-    protected $fileRepository;
+    protected FileService $fileService;
 
     /**
      * @var array
      */
-    private $convertImageUuids = [];
+    private array $convertImageUuids = [];
 
-    protected function action(array $args = [])
+    protected function action(array $args = []): void
     {
         $this->trademaster = $this->container->get('TradeMasterPlugin');
-        $this->catalogCategoryRepository = $this->entityManager->getRepository(\App\Domain\Entities\Catalog\Category::class);
-        $this->catalogProductRepository = $this->entityManager->getRepository(\App\Domain\Entities\Catalog\Product::class);
-        $this->fileRepository = $this->entityManager->getRepository(\App\Domain\Entities\File::class);
+        $this->categoryService = CategoryService::getWithContainer($this->container);
+        $this->productService = ProductService::getWithContainer($this->container);
+        $this->fileService = FileService::getWithContainer($this->container);
 
-        if ($this->getParameter('file_is_enabled', 'no') === 'yes') {
+        if ($this->parameter('file_is_enabled', 'no') === 'yes') {
             foreach ($args['list'] as $index => $item) {
                 if ($item['photo']) {
                     /**
@@ -64,10 +68,12 @@ class DownloadImageTask extends Task
                      */
                     switch ($item['type']) {
                         case 'category':
-                            $entity = $this->catalogCategoryRepository->findOneBy(['uuid' => $item['uuid']]);
+                            $entity = $this->categoryService->read(['uuid' => $item['uuid']]);
+
                             break;
                         case 'product':
-                            $entity = $this->catalogProductRepository->findOneBy(['uuid' => $item['uuid']]);
+                            $entity = $this->productService->read(['uuid' => $item['uuid']]);
+
                             break;
                     }
 
@@ -79,13 +85,12 @@ class DownloadImageTask extends Task
                         foreach (explode(';', $item['photo']) as $name) {
                             $path = $this->trademaster->getFilePath($name);
 
-                            if (($model = \App\Domain\Entities\File::getFromPath($path)) !== null) {
-                                $entity->addFile($model);
-                                $this->entityManager->persist($model);
+                            if (($file = $this->fileService->createFromPath($path)) !== null) {
+                                $entity->addFile($file);
 
                                 // is image
-                                if (\Alksily\Support\Str::start('image/', $model->type)) {
-                                    $this->convertImageUuids[] = $model->uuid;
+                                if (str_start_with($file->getType(), 'image/')) {
+                                    $this->convertImageUuids[] = $file->getUuid();
                                 }
                             } else {
                                 $this->logger->warning('TradeMaster: file not loaded', ['path' => $path]);

@@ -1,10 +1,10 @@
-<?php
+<?php declare(strict_types=1);
 
 namespace Plugin\TradeMaster\Tasks;
 
-use App\Domain\Tasks\Task;
+use App\Domain\AbstractTask;
 
-class SendOrderTask extends Task
+class SendOrderTask extends AbstractTask
 {
     public const TITLE = 'Отправка заказа в ТМ';
 
@@ -56,7 +56,7 @@ class SendOrderTask extends Task
                         'id' => $model->external_id,
                         'name' => $model->title,
                         'quantity' => $quantity,
-                        'price' => (float)$model->price * $quantity,
+                        'price' => (float) $model->price * $quantity,
                     ];
                 }
             }
@@ -65,13 +65,13 @@ class SendOrderTask extends Task
                 'method' => 'POST',
                 'endpoint' => 'order/cart/anonym',
                 'params' => [
-                    'sklad' => $this->getParameter('TradeMasterPlugin_storage'),
-                    'urlico' => $this->getParameter('TradeMasterPlugin_legal'),
-                    'ds' => $this->getParameter('TradeMasterPlugin_checkout'),
-                    'kontragent' => $this->getParameter('TradeMasterPlugin_contractor'),
-                    'shema' => $this->getParameter('TradeMasterPlugin_scheme'),
-                    'valuta' => $this->getParameter('TradeMasterPlugin_currency'),
-                    'userID' => $this->getParameter('TradeMasterPlugin_user'),
+                    'sklad' => $this->parameter('TradeMasterPlugin_storage'),
+                    'urlico' => $this->parameter('TradeMasterPlugin_legal'),
+                    'ds' => $this->parameter('TradeMasterPlugin_checkout'),
+                    'kontragent' => $this->parameter('TradeMasterPlugin_contractor'),
+                    'shema' => $this->parameter('TradeMasterPlugin_scheme'),
+                    'valuta' => $this->parameter('TradeMasterPlugin_currency'),
+                    'userID' => $this->parameter('TradeMasterPlugin_user'),
                     'nameKontakt' => $order->delivery['client'] ?? '',
                     'adresKontakt' => $order->delivery['address'] ?? '',
                     'telefonKontakt' => $order->phone,
@@ -87,32 +87,18 @@ class SendOrderTask extends Task
 
                 $products = collect($this->productRepository->findBy(['uuid' => array_keys($order->list)]));
 
-                // письмо
-                if (($tpl = $this->getParameter('TradeMasterPlugin_mail_client_template', '')) !== '') {
-                    $body = $this->render($tpl, ['order' => $order, 'products' => $products]);
-
-                    if ($order->email) {
-                        // add task send client mail
-                        $task = new \App\Domain\Tasks\SendMailTask($this->container);
-                        $task->execute([
-                            'to' => $order->email,
-                            'body' => $body,
-                            'isHtml' => true,
-                        ]);
-                    }
-
-                    $userRepository = $this->entityManager->getRepository(\App\Domain\Entities\User::class);
-                    $users = collect($userRepository->findBy(['level' => \App\Domain\Types\UserLevelType::LEVEL_ADMIN, 'allow_mail' => 1]));
-
-                    if ($users->count()) {
-                        // add task send admin mail
-                        $task = new \App\Domain\Tasks\SendMailTask($this->container);
-                        $task->execute([
-                            'to' => $users->pluck('username', 'email')->all(),
-                            'body' => $body,
-                            'isHtml' => true,
-                        ]);
-                    }
+                // письмо клиенту
+                if (
+                    $order->email &&
+                    ($tpl = $this->parameter('TradeMasterPlugin_mail_client_template', '')) !== ''
+                ) {
+                    // add task send client mail
+                    $task = new \App\Domain\Tasks\SendMailTask($this->container);
+                    $task->execute([
+                        'to' => $order->email,
+                        'body' => $this->render($tpl, ['order' => $order, 'products' => $products]),
+                        'isHtml' => true,
+                    ]);
                 }
 
                 return $this->setStatusDone();
