@@ -3,6 +3,7 @@
 namespace Plugin\TradeMaster;
 
 use App\Domain\AbstractPlugin;
+use App\Domain\Service\Parameter\ParameterService;
 use Psr\Container\ContainerInterface;
 use Slim\Http\Request;
 use Slim\Http\Response;
@@ -14,7 +15,7 @@ class TradeMasterPlugin extends AbstractPlugin
     const DESCRIPTION = 'Плагин реализует функционал интеграции с системой торгово-складского учета.';
     const AUTHOR = 'Aleksey Ilyin';
     const AUTHOR_SITE = 'https://u4et.ru/trademaster';
-    const VERSION = '2.0';
+    const VERSION = '2.1';
 
     public function __construct(ContainerInterface $container)
     {
@@ -28,145 +29,176 @@ class TradeMasterPlugin extends AbstractPlugin
         );
         $this->addTwigExtension(\Plugin\TradeMaster\TradeMasterPluginTwigExt::class);
         $this->addToolbarItem(['twig' => 'trademaster.twig']);
-        $this->addSettingsField([
-            'label' => 'Включение и выключение TradeMaster',
-            'type' => 'select',
-            'name' => 'enable',
-            'args' => [
-                'option' => [
-                    'off' => 'Выключена',
-                    'on' => 'Включена',
-                ],
-            ],
-        ]);
-        $this->addSettingsField([
-            'label' => 'Обновлять продукты в TM',
-            'description' => 'Выгружать продукты автоматически после каждого изменения',
-            'type' => 'select',
-            'name' => 'auto_update',
-            'args' => [
-                'selected' => 'off',
-                'option' => [
-                    'off' => 'Нет',
-                    'on' => 'Да',
-                ],
-            ],
-        ]);
 
         $this->addSettingsField([
-            'label' => 'API Host',
-            'type' => 'text',
-            'name' => 'host',
-            'args' => [
-                'value' => 'https://api.trademaster.pro',
-                'readonly' => true,
-            ],
-        ]);
-        $this->addSettingsField([
-            'label' => 'API Version',
-            'type' => 'text',
-            'name' => 'version',
-            'args' => [
-                'value' => '2',
-                'readonly' => true,
-            ],
-        ]);
-        $this->addSettingsField([
-            'label' => 'API Key',
+            'label' => 'Ключ доступа к API',
             'description' => 'Введите полученный вами ключ',
             'type' => 'text',
             'name' => 'key',
         ]);
-        $this->addSettingsField([
-            'label' => 'API Currency',
-            'description' => 'Валюта отправляемая по API',
-            'type' => 'text',
-            'name' => 'currency',
-            'args' => [
-                'value' => 'RUB',
-            ],
-        ]);
-        $this->addSettingsField([
-            'label' => 'Cache host',
-            'description' => 'Хост кеш файлов',
-            'type' => 'text',
-            'name' => 'cache_host',
-            'args' => [
-                'value' => 'https://trademaster.pro',
-            ],
-        ]);
-        $this->addSettingsField([
-            'label' => 'Cache folder',
-            'description' => 'Папка кеш файлов',
-            'type' => 'text',
-            'name' => 'cache_folder',
-        ]);
-        $this->addSettingsField([
-            'label' => 'Struct',
-            'type' => 'number',
-            'name' => 'struct',
-            'args' => [
-                'value' => '0',
-            ],
-        ]);
-        $this->addSettingsField([
-            'label' => 'Storage',
-            'type' => 'number',
-            'name' => 'storage',
-            'args' => [
-                'value' => '0',
-            ],
-        ]);
-        $this->addSettingsField([
-            'label' => 'Legal',
-            'type' => 'number',
-            'name' => 'legal',
-            'args' => [
-                'value' => '0',
-            ],
-        ]);
-        $this->addSettingsField([
-            'label' => 'Checkout',
-            'type' => 'number',
-            'name' => 'checkout',
-            'args' => [
-                'value' => '0',
-            ],
-        ]);
-        $this->addSettingsField([
-            'label' => 'Contractor',
-            'type' => 'number',
-            'name' => 'contractor',
-            'args' => [
-                'value' => '0',
-            ],
-        ]);
-        $this->addSettingsField([
-            'label' => 'Scheme',
-            'type' => 'number',
-            'name' => 'scheme',
-            'args' => [
-                'value' => '0',
-            ],
-        ]);
-        $this->addSettingsField([
-            'label' => 'User ID',
-            'type' => 'number',
-            'name' => 'user',
-            'args' => [
-                'value' => '0',
-            ],
-        ]);
 
-        $this->addSettingsField([
-            'label' => 'Шаблон письма клиенту',
-            'description' => 'Если значения нет, письмо не будет отправляться',
-            'type' => 'text',
-            'name' => 'mail_client_template',
-            'args' => [
-                'placeholder' => 'catalog.mail.client.twig',
-            ],
-        ]);
+        if ($this->parameter('TradeMasterPlugin_key', '') !== '') {
+            $this->addSettingsField([
+                'label' => 'Хост API',
+                'type' => 'text',
+                'name' => 'host',
+                'args' => [
+                    'value' => 'https://api.trademaster.pro',
+                    'readonly' => true,
+                ],
+            ]);
+            $this->addSettingsField([
+                'label' => 'Версия API',
+                'type' => 'text',
+                'name' => 'version',
+                'args' => [
+                    'value' => '2',
+                    'readonly' => true,
+                ],
+            ]);
+            $this->addSettingsField([
+                'label' => 'Валюта API',
+                'type' => 'text',
+                'name' => 'currency',
+                'args' => [
+                    'value' => 'RUB',
+                ],
+            ]);
+            $this->addSettingsField([
+                'label' => 'Хост кеш файлов',
+                'type' => 'text',
+                'name' => 'cache_host',
+                'args' => [
+                    'value' => 'https://trademaster.pro',
+                ],
+            ]);
+            $this->addSettingsField([
+                'label' => 'Папка на хосте с кеш файлами',
+                'type' => 'text',
+                'name' => 'cache_folder',
+            ]);
+
+            $this->addSettingsField([
+                'label' => '',
+                'type' => 'button',
+                'name' => 'update',
+                'args' => [
+                    'class' => ['btn', 'btn-info'],
+                    'value' => 'Загрузить данные API',
+                ],
+            ]);
+
+            // saved config from API
+            $config = json_decode($this->parameter('TradeMasterPlugin_config', '[]'), true);
+
+            $this->addSettingsField([
+                'label' => 'Склад',
+                'type' => 'select',
+                'name' => 'storage',
+                'args' => [
+                    'option' => $config['storage'] ?? [],
+                ],
+            ]);
+            $this->addSettingsField([
+                'label' => 'Legal',
+                'type' => 'select',
+                'name' => 'legal',
+                'args' => [
+                    'option' => $config['legal'] ?? [],
+                ],
+            ]);
+            $this->addSettingsField([
+                'label' => 'Счет',
+                'type' => 'select',
+                'name' => 'checkout',
+                'args' => [
+                    'option' => $config['checkout'] ?? [],
+                ],
+            ]);
+            $this->addSettingsField([
+                'label' => 'Контрактор',
+                'type' => 'select',
+                'name' => 'contractor',
+                'args' => [
+                    'option' => $config['contractor'] ?? [],
+                ],
+            ]);
+            $this->addSettingsField([
+                'label' => 'Схема',
+                'type' => 'select',
+                'name' => 'scheme',
+                'args' => [
+                    'option' => $config['scheme'] ?? [],
+                ],
+            ]);
+            $this->addSettingsField([
+                'label' => 'Пользователь ID',
+                'type' => 'select',
+                'name' => 'user',
+                'args' => [
+                    'option' => $config['user'] ?? [],
+                ],
+            ]);
+            $this->addSettingsField([
+                'label' => 'Структура',
+                'type' => 'number',
+                'name' => 'struct',
+                'args' => [
+                    'value' => '0',
+                ],
+            ]);
+            $this->addSettingsField([
+                'label' => '',
+                'type' => 'textarea',
+                'name' => 'config',
+                'args' => [
+                    'value' => $this->parameter('TradeMasterPlugin_config', '[]'),
+                    'style' => 'display: none;'
+                ],
+            ]);
+
+            $this->addSettingsField([
+                'label' => 'Обновлять продукты в TM',
+                'description' => 'Выгружать продукты автоматически после каждого изменения',
+                'type' => 'select',
+                'name' => 'auto_update',
+                'args' => [
+                    'selected' => 'off',
+                    'option' => [
+                        'off' => 'Нет',
+                        'on' => 'Да',
+                    ],
+                ],
+            ]);
+            $this->addSettingsField([
+                'label' => 'Шаблон письма клиенту',
+                'description' => 'Если значения нет, письмо не будет отправляться',
+                'type' => 'text',
+                'name' => 'mail_client_template',
+                'args' => [
+                    'placeholder' => 'catalog.mail.client.twig',
+                ],
+            ]);
+        }
+
+        $this
+            ->map([
+                'methods' => ['get'],
+                'pattern' => '/cup/trademaster',
+                'handler' => function (Request $req, Response $res) use ($container) {
+                    return $res->withJson(
+                        array_merge(
+                            ['scheme' => collect($this->api(['endpoint' => 'object/getScheme']))->pluck('shema', 'idShema')->all()],
+                            ['storage' => collect($this->api(['endpoint' => 'object/getStorage']))->pluck('nameSklad', 'idSklad')->all()],
+                            ['checkout' => collect($this->api(['endpoint' => 'object/moneyOwn']))->pluck('naimenovanie', 'idDenSred')->all()],
+                            ['legal' => collect($this->api(['endpoint' => 'object/legalsOwn']))->pluck('name', 'idUrllico')->all()],
+                            ['contractor' => collect($this->api(['endpoint' => 'object/legalsKontr']))->pluck('name', 'idUrllico')->all()],
+                            ['user' => collect($this->api(['endpoint' => 'object/getLogin']))->pluck('login', 'id')->all()],
+                        )
+                    );
+                },
+            ])
+            ->add(new \App\Application\Middlewares\CupMiddleware($container));
     }
 
     public function after(Request $request, Response $response, string $routeName): Response
