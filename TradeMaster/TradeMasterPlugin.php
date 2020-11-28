@@ -84,7 +84,7 @@ class TradeMasterPlugin extends AbstractPlugin
                 'name' => 'update',
                 'args' => [
                     'class' => ['btn', 'btn-info'],
-                    'value' => 'Загрузить данные API',
+                    'value' => 'Загрузить параметры из API',
                 ],
             ]);
 
@@ -100,7 +100,7 @@ class TradeMasterPlugin extends AbstractPlugin
                 ],
             ]);
             $this->addSettingsField([
-                'label' => 'Legal',
+                'label' => 'Юр. Лицо',
                 'type' => 'select',
                 'name' => 'legal',
                 'args' => [
@@ -140,11 +140,15 @@ class TradeMasterPlugin extends AbstractPlugin
                 ],
             ]);
             $this->addSettingsField([
-                'label' => 'Структура',
-                'type' => 'number',
+                'label' => 'Структура БД',
+                'type' => 'select',
                 'name' => 'struct',
                 'args' => [
-                    'value' => '0',
+                    'selected' => 'off',
+                    'option' => [
+                        '0' => 'Простая',
+                        '1' => 'Сложная',
+                    ],
                 ],
             ]);
             $this->addSettingsField([
