@@ -285,7 +285,7 @@ class TradeMasterPlugin extends AbstractPlugin
                 ]));
             }
 
-            return json_decode($result, true);
+            return $result ? json_decode($result, true) : [];
         }
 
         return [];
