@@ -3,6 +3,7 @@
 namespace Plugin\TradeMaster\Tasks;
 
 use App\Domain\AbstractTask;
+use App\Domain\Service\Catalog\OrderService as CatalogOrderService;
 
 class SendOrderTask extends AbstractTask
 {
@@ -36,27 +37,26 @@ class SendOrderTask extends AbstractTask
     protected function action(array $args = [])
     {
         $this->trademaster = $this->container->get('TradeMasterPlugin');
-        $this->productRepository = $this->entityManager->getRepository(\App\Domain\Entities\Catalog\Product::class);
-        $this->orderRepository = $this->entityManager->getRepository(\App\Domain\Entities\Catalog\Order::class);
+        $catalogOrderService = CatalogOrderService::getWithContainer($this->container);
+        $order = $catalogOrderService->read(['uuid' => $args['uuid']]);
 
-        /** @var \App\Domain\Entities\Catalog\Order $order */
-        $order = $this->orderRepository->findOneBy(['uuid' => $args['uuid']]);
         if ($order) {
-            if ($order->external_id) {
+            if ($order->getExternalId()) {
                 return $this->setStatusCancel();
             }
 
+            $productService = \App\Domain\Service\Catalog\ProductService::getWithContainer($this->container);
             $products = [];
 
             /** @var \App\Domain\Entities\Catalog\Product $model */
-            foreach ($this->productRepository->findBy(['uuid' => array_keys($order->list)]) as $model) {
-                if ($model->external_id) {
-                    $quantity = $order->list[$model->uuid->toString()];
+            foreach ($productService->read(['uuid' => array_keys($order->getList())]) as $model) {
+                if ($model->getExternalId()) {
+                    $quantity = $order->getList()[$model->getUuid()->toString()];
                     $products[] = [
-                        'id' => $model->external_id,
-                        'name' => $model->title,
+                        'id' => $model->getExternalId(),
+                        'name' => $model->getTitle(),
                         'quantity' => $quantity,
-                        'price' => (float) $model->price * $quantity,
+                        'price' => (float) $model->getPrice() * $quantity,
                     ];
                 }
             }
@@ -72,30 +72,29 @@ class SendOrderTask extends AbstractTask
                     'shema' => $this->parameter('TradeMasterPlugin_scheme'),
                     'valuta' => $this->parameter('TradeMasterPlugin_currency'),
                     'userID' => $this->parameter('TradeMasterPlugin_user'),
-                    'nameKontakt' => $order->delivery['client'] ?? '',
-                    'adresKontakt' => $order->delivery['address'] ?? '',
-                    'telefonKontakt' => $order->phone,
-                    'other1Kontakt' => $order->email,
-                    'dateDost' => $order->shipping->format('Y-m-d H:i:s'),
-                    'komment' => $order->comment,
+                    'nameKontakt' => $order->getDelivery()['client'] ?? '',
+                    'adresKontakt' => $order->getDelivery()['address'] ?? '',
+                    'telefonKontakt' => $order->getPhone(),
+                    'other1Kontakt' => $order->getEmail(),
+                    'dateDost' => $order->getShipping()->format('Y-m-d H:i:s'),
+                    'komment' => $order->getComment(),
                     'tovarJson' => json_encode($products, JSON_UNESCAPED_UNICODE),
                 ],
             ]);
 
             if ($result && !empty($result['nomerZakaza'])) {
-                $order->external_id = $result['nomerZakaza'];
-
-                $products = collect($this->productRepository->findBy(['uuid' => array_keys($order->list)]));
+                $catalogOrderService->update($order, ['external_id' => $result['nomerZakaza']]);
+                $products = $productService->read(['uuid' => array_keys($order->getList())]);
 
                 // письмо клиенту
                 if (
-                    $order->email &&
+                    $order->getEmail() &&
                     ($tpl = $this->parameter('TradeMasterPlugin_mail_client_template', '')) !== ''
                 ) {
                     // add task send client mail
                     $task = new \App\Domain\Tasks\SendMailTask($this->container);
                     $task->execute([
-                        'to' => $order->email,
+                        'to' => $order->getEmail(),
                         'body' => $this->render($tpl, ['order' => $order, 'products' => $products]),
                         'isHtml' => true,
                     ]);
