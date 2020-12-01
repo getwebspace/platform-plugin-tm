@@ -213,7 +213,7 @@ class TradeMasterPlugin extends AbstractPlugin
                     $orderRepository = $this->entityManager->getRepository(\App\Domain\Entities\Catalog\Order::class);
 
                     /** @var \App\Domain\Entities\Catalog\Order $model */
-                    foreach ($orderRepository->findBy(['external_id' => null], ['date' => 'desc'], 5) as $model) {
+                    foreach ($orderRepository->findBy(['external_id' => ''], ['date' => 'desc'], 5) as $model) {
                         // add task send to TradeMaster
                         $task = new \Plugin\TradeMaster\Tasks\SendOrderTask($this->container);
                         $task->execute(['uuid' => $model->uuid]);
