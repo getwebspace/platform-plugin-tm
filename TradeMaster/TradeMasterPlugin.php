@@ -185,10 +185,11 @@ class TradeMasterPlugin extends AbstractPlugin
             ]);
         }
 
+        // api for plugin config
         $this
             ->map([
                 'methods' => ['get'],
-                'pattern' => '/cup/trademaster',
+                'pattern' => '/api/trademaster/config',
                 'handler' => function (Request $req, Response $res) use ($container) {
                     return $res->withJson(
                         array_merge(
@@ -203,6 +204,32 @@ class TradeMasterPlugin extends AbstractPlugin
                 },
             ])
             ->add(new \App\Application\Middlewares\CupMiddleware($container));
+
+        // proxy method for TM api
+        $this
+            ->map([
+                'methods' => ['get', 'post'],
+                'pattern' => '/api/trademaster/proxy',
+                'handler' => function (Request $req, Response $res) use ($container) {
+                    $default = [
+                        'endpoint' => '',
+                        'params' => [],
+                    ];
+                    $data = array_merge($default, $req->getParams());
+
+                    if ($data) {
+                        return $res->withJson(
+                            $this->api([
+                                'endpoint' => $data['endpoint'],
+                                'params' => array_diff_key($data, array_flip(['endpoint', 'method', 'params'])),
+                                'method' => $req->isPost() ? 'POST' : 'GET',
+                            ])
+                        );
+                    }
+
+                    return $res->withJson([]);
+                },
+            ]);
     }
 
     public function after(Request $request, Response $response, string $routeName): Response

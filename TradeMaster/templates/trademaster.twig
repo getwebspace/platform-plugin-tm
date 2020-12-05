@@ -40,7 +40,7 @@
             $btn.on('click', () => {
                 $spin.insertAfter($btn.prop('disabled', true));
 
-                $.getJSON('/cup/trademaster', (res) => {
+                $.getJSON('/api/trademaster/config', (res) => {
                     if (res) {
                         for (let field in res) {
                             if (res.hasOwnProperty(field)) {
