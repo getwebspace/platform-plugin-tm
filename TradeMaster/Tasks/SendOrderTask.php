@@ -4,6 +4,8 @@ namespace Plugin\TradeMaster\Tasks;
 
 use App\Domain\AbstractTask;
 use App\Domain\Service\Catalog\OrderService as CatalogOrderService;
+use App\Domain\Service\User\Exception\UserNotFoundException;
+use App\Domain\Service\User\UserService;
 
 class SendOrderTask extends AbstractTask
 {
@@ -61,6 +63,14 @@ class SendOrderTask extends AbstractTask
                 }
             }
 
+            // get user info
+            try {
+                $userService = UserService::getWithContainer($this->container);
+                $user = $userService->read(['uuid' => $order->getUserUuid()]);
+            } catch (UserNotFoundException $e) {
+                $user = null;
+            }
+
             $result = $this->trademaster->api([
                 'method' => 'POST',
                 'endpoint' => 'order/cart/anonym',
@@ -76,6 +86,7 @@ class SendOrderTask extends AbstractTask
                     'adresKontakt' => $order->getDelivery()['address'] ?? '',
                     'telefonKontakt' => $order->getPhone(),
                     'other1Kontakt' => $order->getEmail(),
+                    'other2Kontakt' => $user ? $user->getAdditional() : '',
                     'dateDost' => $order->getShipping()->format('Y-m-d H:i:s'),
                     'komment' => $order->getComment(),
                     'tovarJson' => json_encode($products, JSON_UNESCAPED_UNICODE),

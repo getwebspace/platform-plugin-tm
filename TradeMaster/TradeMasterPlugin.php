@@ -3,7 +3,6 @@
 namespace Plugin\TradeMaster;
 
 use App\Domain\AbstractPlugin;
-use App\Domain\Service\Parameter\ParameterService;
 use Psr\Container\ContainerInterface;
 use Slim\Http\Request;
 use Slim\Http\Response;
@@ -23,7 +22,7 @@ class TradeMasterPlugin extends AbstractPlugin
 
         $this->setTemplateFolder(__DIR__ . '/templates');
         $this->setHandledRoute(
-            'catalog:cart',
+            'common:catalog:cart',
             'cup:catalog:product:edit',
             'cup:catalog:data:import'
         );
@@ -157,7 +156,7 @@ class TradeMasterPlugin extends AbstractPlugin
                 'name' => 'config',
                 'args' => [
                     'value' => $this->parameter('TradeMasterPlugin_config', '[]'),
-                    'style' => 'display: none;'
+                    'style' => 'display: none;',
                 ],
             ]);
 
@@ -203,7 +202,7 @@ class TradeMasterPlugin extends AbstractPlugin
                     );
                 },
             ])
-            ->add(new \App\Application\Middlewares\CupMiddleware($container));
+            ->setName('api:tm:config');
 
         // proxy method for TM api
         $this
@@ -229,13 +228,14 @@ class TradeMasterPlugin extends AbstractPlugin
 
                     return $res->withJson([]);
                 },
-            ]);
+            ])
+            ->setName('api:tm:proxy');
     }
 
     public function after(Request $request, Response $response, string $routeName): Response
     {
         switch ($routeName) {
-            case 'catalog:cart':
+            case 'common:catalog:cart':
                 if ($request->isPost()) {
                     $orderRepository = $this->entityManager->getRepository(\App\Domain\Entities\Catalog\Order::class);
 
