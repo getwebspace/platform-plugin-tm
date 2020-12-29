@@ -64,12 +64,7 @@ class SendOrderTask extends AbstractTask
             }
 
             // get user info
-            try {
-                $userService = UserService::getWithContainer($this->container);
-                $user = $userService->read(['uuid' => $order->getUserUuid()]);
-            } catch (UserNotFoundException $e) {
-                $user = null;
-            }
+            $user = $order->getUser();
 
             $result = $this->trademaster->api([
                 'method' => 'POST',
