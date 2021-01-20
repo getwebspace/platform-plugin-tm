@@ -14,7 +14,7 @@ class TradeMasterPlugin extends AbstractPlugin
     const DESCRIPTION = 'Плагин реализует функционал интеграции с системой торгово-складского учета.';
     const AUTHOR = 'Aleksey Ilyin';
     const AUTHOR_SITE = 'https://u4et.ru/trademaster';
-    const VERSION = '2.1';
+    const VERSION = '2.2';
 
     public function __construct(ContainerInterface $container)
     {
@@ -237,21 +237,29 @@ class TradeMasterPlugin extends AbstractPlugin
         switch ($routeName) {
             case 'common:catalog:cart':
                 if ($request->isPost()) {
-                    $orderRepository = $this->entityManager->getRepository(\App\Domain\Entities\Catalog\Order::class);
+                    $catalogOrderService = CatalogOrderService::getWithContainer($this->container);
 
-                    /** @var \App\Domain\Entities\Catalog\Order $model */
-                    foreach ($orderRepository->findBy(['external_id' => ''], ['date' => 'desc'], 5) as $model) {
-                        // add task send to TradeMaster
-                        $task = new \Plugin\TradeMaster\Tasks\SendOrderTask($this->container);
-                        $task->execute(['uuid' => $model->uuid]);
+                    try {
+                        $order = $catalogOrderService->read([
+                            'user' => $request->getAttribute('user', null),
+                            'external_id' => '',
+                            'order' => ['date' => 'desc'],
+                            'limit' => 1
+                        ]);
+
+                        if ($order) {
+                            // add task send to TradeMaster
+                            $task = new \Plugin\TradeMaster\Tasks\SendOrderTask($this->container);
+                            $task->execute(['uuid' => $order->getUuid()]);
+
+                            // run worker
+                            \App\Domain\AbstractTask::worker($task);
+
+                            sleep(5); // костыль
+                        }
+                    } catch (OrderNotFoundException $e) {
+                        // nothing
                     }
-
-                    $this->entityManager->flush();
-
-                    // run worker
-                    \App\Domain\AbstractTask::worker();
-
-                    sleep(5); // костыль
                 }
 
                 break;

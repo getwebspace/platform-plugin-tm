@@ -82,6 +82,9 @@ class CatalogDownloadTask extends AbstractTask
                 // download images
                 $task = new \Plugin\TradeMaster\Tasks\DownloadImageTask($this->container);
                 $task->execute(['list' => $this->downloadImages]);
+
+                // run worker
+                \App\Domain\AbstractTask::worker($task);
             }
 
             $this->setProgress(100);

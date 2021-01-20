@@ -112,6 +112,9 @@ class DownloadImageTask extends AbstractTask
             // add task convert
             $task = new \App\Domain\Tasks\ConvertImageTask($this->container);
             $task->execute(['uuid' => $this->convertImageUuids]);
+
+            // run worker
+            \App\Domain\AbstractTask::worker($task);
         }
 
         $this->setStatusDone();
