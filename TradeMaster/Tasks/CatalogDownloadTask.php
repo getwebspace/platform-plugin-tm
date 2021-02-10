@@ -6,6 +6,7 @@ use App\Domain\AbstractService;
 use App\Domain\AbstractTask;
 use App\Domain\Service\Catalog\CategoryService;
 use App\Domain\Service\Catalog\Exception\AddressAlreadyExistsException;
+use App\Domain\Service\Catalog\Exception\CategoryNotFoundException;
 use App\Domain\Service\Catalog\Exception\MissingTitleValueException;
 use App\Domain\Service\Catalog\Exception\TitleAlreadyExistsException;
 use App\Domain\Service\Catalog\ProductService;
@@ -112,17 +113,16 @@ class CatalogDownloadTask extends AbstractTask
 
         foreach ($list as $item) {
             $data = [
+                'status' => \App\Domain\Types\Catalog\CategoryStatusType::STATUS_WORK,
                 'external_id' => $item['idZvena'],
                 'parent' => \Ramsey\Uuid\Uuid::NIL,
                 'title' => $item['nameZvena'],
                 'order' => $item['poryadok'],
                 'description' => urldecode($item['opisanie']),
-                'address' => $item['link'],
                 'field1' => $item['ind1'],
                 'field2' => $item['ind2'],
                 'field3' => $item['ind3'],
                 'template' => $template,
-                'children' => true,
                 'meta' => [
                     'title' => $item['nameZvena'],
                     'description' => strip_tags(urldecode($item['opisanie'])),
@@ -151,6 +151,17 @@ class CatalogDownloadTask extends AbstractTask
                 $this->logger->warning('TradeMaster: category title wrong value', $data);
             } catch (TitleAlreadyExistsException $e) {
                 $this->logger->warning('TradeMaster: category title exist', $data);
+
+                $category = $categories->firstWhere('title', $data['title']);
+
+                if (!empty($category)) {
+                    try {
+                        $this->categoryService->update($category, $data);
+                        $this->logger->warning('TradeMaster: category updated', $data);
+                    } catch (TitleAlreadyExistsException $e) {
+                        $this->logger->warning('TradeMaster: category ignored', $data);
+                    }
+                }
             } catch (AddressAlreadyExistsException $e) {
                 $this->logger->warning('TradeMaster: category address exist', $data);
             }
@@ -237,13 +248,13 @@ class CatalogDownloadTask extends AbstractTask
                 // полученные данные проверяем и записываем в модели товара
                 foreach ($list as $item) {
                     $data = [
+                        'status' => \App\Domain\Types\Catalog\ProductStatusType::STATUS_WORK,
                         'external_id' => $item['idTovar'],
                         'category' => \Ramsey\Uuid\Uuid::NIL,
                         'title' => trim($item['name']),
                         'order' => $item['poryadok'],
                         'description' => trim(urldecode($item['opisanie'])),
                         'extra' => trim(urldecode($item['opisanieDop'])),
-                        'address' => $item['link'],
                         'field1' => $item['ind1'],
                         'field2' => $item['ind2'],
                         'field3' => $item['ind3'],
@@ -290,6 +301,17 @@ class CatalogDownloadTask extends AbstractTask
                         $this->logger->warning('TradeMaster: product title wrong value', $data);
                     } catch (TitleAlreadyExistsException $e) {
                         $this->logger->warning('TradeMaster: product title exist', $data);
+
+                        $product = $products->firstWhere('title', $data['title']);
+
+                        if (!empty($product)) {
+                            try {
+                                $this->productService->update($product, $data);
+                                $this->logger->warning('TradeMaster: product updated', $data);
+                            } catch (TitleAlreadyExistsException $e) {
+                                $this->logger->warning('TradeMaster: product ignored', $data);
+                            }
+                        }
                     } catch (AddressAlreadyExistsException $e) {
                         $this->logger->warning('TradeMaster: product address exist', $data);
                     }

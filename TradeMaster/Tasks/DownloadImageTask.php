@@ -88,9 +88,11 @@ class DownloadImageTask extends AbstractTask
                             if (($file = $this->fileService->createFromPath($path)) !== null) {
                                 $entity->addFile($file);
 
-                                // is image
-                                if (str_start_with($file->getType(), 'image/')) {
-                                    $this->convertImageUuids[] = $file->getUuid();
+                                if ($file->getInternalPath('full') === $file->getInternalPath('middle')) {
+                                    // is image
+                                    if (str_start_with($file->getType(), 'image/')) {
+                                        $this->convertImageUuids[] = $file->getUuid();
+                                    }
                                 }
                             } else {
                                 $this->logger->warning('TradeMaster: file not loaded', ['path' => $path]);

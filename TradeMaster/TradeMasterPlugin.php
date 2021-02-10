@@ -3,6 +3,10 @@
 namespace Plugin\TradeMaster;
 
 use App\Domain\AbstractPlugin;
+use App\Domain\Entities\User;
+use App\Domain\Service\Catalog\Exception\OrderNotFoundException;
+use App\Domain\Service\Catalog\OrderService as CatalogOrderService;
+use App\Domain\Service\Parameter\ParameterService;
 use Psr\Container\ContainerInterface;
 use Slim\Http\Request;
 use Slim\Http\Response;
@@ -14,7 +18,7 @@ class TradeMasterPlugin extends AbstractPlugin
     const DESCRIPTION = 'Плагин реализует функционал интеграции с системой торгово-складского учета.';
     const AUTHOR = 'Aleksey Ilyin';
     const AUTHOR_SITE = 'https://u4et.ru/trademaster';
-    const VERSION = '2.2';
+    const VERSION = '2.3';
 
     public function __construct(ContainerInterface $container)
     {
@@ -220,7 +224,7 @@ class TradeMasterPlugin extends AbstractPlugin
                         return $res->withJson(
                             $this->api([
                                 'endpoint' => $data['endpoint'],
-                                'params' => array_diff_key($data, array_flip(['endpoint', 'method', 'params'])),
+                                'params' => $data['params'],
                                 'method' => $req->isPost() ? 'POST' : 'GET',
                             ])
                         );
@@ -237,25 +241,51 @@ class TradeMasterPlugin extends AbstractPlugin
         switch ($routeName) {
             case 'common:catalog:cart':
                 if ($request->isPost()) {
+                    $this->entityManager->clear();
                     $catalogOrderService = CatalogOrderService::getWithContainer($this->container);
 
                     try {
+                        $idKontakt = $request->getParam('idKontakt', '');
+                        $numberDoc = $request->getParam('numberDoc', '');
+                        $numberDocStr = $request->getParam('numberDocStr', '');
+                        $type = $request->getParam('type', '');
+                        $passport = $request->getParam('passport', '');
                         $order = $catalogOrderService->read([
                             'user' => $request->getAttribute('user', null),
-                            'external_id' => '',
+                            'external_id' => [''],
                             'order' => ['date' => 'desc'],
                             'limit' => 1
-                        ]);
+                        ])->first();
 
                         if ($order) {
                             // add task send to TradeMaster
                             $task = new \Plugin\TradeMaster\Tasks\SendOrderTask($this->container);
-                            $task->execute(['uuid' => $order->getUuid()]);
+                            $task->execute([
+                                'uuid' => $order->getUuid(),
+                                'idKontakt' => $idKontakt,
+                                'numberDoc' => $numberDoc,
+                                'numberDocStr' => $numberDocStr,
+                                'type' => $type,
+                                'passport' => $passport,
+                            ]);
 
                             // run worker
                             \App\Domain\AbstractTask::worker($task);
 
                             sleep(5); // костыль
+
+                            if (in_array($type, ['rezervTel', 'reserve']) || ($numberDoc && $numberDocStr && $idKontakt)) {
+                                $uuid = $order->getUuid();
+                                $this->entityManager->clear();
+                                $order = $catalogOrderService->read(['uuid' => $uuid]);
+
+                                if (!$order->getExternalId()) {
+                                    $response = $response->withJson(['exception' => $order->getSystem()]);
+                                    $catalogOrderService->delete($order);
+
+                                    return $response;
+                                }
+                            }
                         }
                     } catch (OrderNotFoundException $e) {
                         // nothing
@@ -293,7 +323,8 @@ class TradeMasterPlugin extends AbstractPlugin
         $data = array_merge($default, $data);
         $data['method'] = mb_strtoupper($data['method']);
 
-        $this->logger->info('TradeMaster: API access', ['endpoint' => $data['endpoint']]);
+        // $this->logger->info('TradeMaster: API access', ['endpoint' => $data['endpoint']]);
+        // $this->logger->info('TradeMaster: API data', ['data' => json_encode($data['params'], JSON_UNESCAPED_UNICODE)]);
 
         if (($key = $this->parameter('TradeMasterPlugin_key')) !== null) {
             $pathParts = [
@@ -319,6 +350,8 @@ class TradeMasterPlugin extends AbstractPlugin
                     ],
                 ]));
             }
+
+            // $this->logger->info('TradeMaster: API result', ['output' => $result]);
 
             return $result ? json_decode($result, true) : [];
         }
