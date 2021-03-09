@@ -64,7 +64,7 @@ class DownloadImageTask extends AbstractTask
             foreach ($args['list'] as $index => $item) {
                 if ($item['photo']) {
                     /**
-                     * @var \App\Domain\Entities\Catalog\Category|\App\Domain\Entities\Catalog\Product $model
+                     * @var \App\Domain\Entities\Catalog\Category|\App\Domain\Entities\Catalog\Product $entity
                      */
                     switch ($item['type']) {
                         case 'category':

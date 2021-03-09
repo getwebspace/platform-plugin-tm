@@ -238,71 +238,73 @@ class TradeMasterPlugin extends AbstractPlugin
 
     public function after(Request $request, Response $response, string $routeName): Response
     {
-        switch ($routeName) {
-            case 'common:catalog:cart':
-                if ($request->isPost()) {
-                    $this->entityManager->clear();
-                    $catalogOrderService = CatalogOrderService::getWithContainer($this->container);
+        if ($this->parameter('TradeMasterPlugin_key', '') !== '') {
+            switch ($routeName) {
+                case 'common:catalog:cart':
+                    if ($request->isPost()) {
+                        $this->entityManager->clear();
+                        $catalogOrderService = CatalogOrderService::getWithContainer($this->container);
 
-                    try {
-                        $idKontakt = $request->getParam('idKontakt', '');
-                        $numberDoc = $request->getParam('numberDoc', '');
-                        $numberDocStr = $request->getParam('numberDocStr', '');
-                        $type = $request->getParam('type', '');
-                        $passport = $request->getParam('passport', '');
-                        $order = $catalogOrderService->read([
-                            'user' => $request->getAttribute('user', null),
-                            'external_id' => [''],
-                            'order' => ['date' => 'desc'],
-                            'limit' => 1
-                        ])->first();
+                        try {
+                            $idKontakt = $request->getParam('idKontakt', '');
+                            $numberDoc = $request->getParam('numberDoc', '');
+                            $numberDocStr = $request->getParam('numberDocStr', '');
+                            $type = $request->getParam('type', '');
+                            $passport = $request->getParam('passport', '');
+                            $order = $catalogOrderService->read([
+                                'user' => $request->getAttribute('user', null),
+                                'external_id' => [''],
+                                'order' => ['date' => 'desc'],
+                                'limit' => 1
+                            ])->first();
 
-                        if ($order) {
-                            // add task send to TradeMaster
-                            $task = new \Plugin\TradeMaster\Tasks\SendOrderTask($this->container);
-                            $task->execute([
-                                'uuid' => $order->getUuid(),
-                                'idKontakt' => $idKontakt,
-                                'numberDoc' => $numberDoc,
-                                'numberDocStr' => $numberDocStr,
-                                'type' => $type,
-                                'passport' => $passport,
-                            ]);
+                            if ($order) {
+                                // add task send to TradeMaster
+                                $task = new \Plugin\TradeMaster\Tasks\SendOrderTask($this->container);
+                                $task->execute([
+                                    'uuid' => $order->getUuid(),
+                                    'idKontakt' => $idKontakt,
+                                    'numberDoc' => $numberDoc,
+                                    'numberDocStr' => $numberDocStr,
+                                    'type' => $type,
+                                    'passport' => $passport,
+                                ]);
 
-                            // run worker
-                            \App\Domain\AbstractTask::worker($task);
+                                // run worker
+                                \App\Domain\AbstractTask::worker($task);
 
-                            sleep(5); // костыль
+                                sleep(5); // костыль
 
-                            if (in_array($type, ['rezervTel', 'reserve']) || ($numberDoc && $numberDocStr && $idKontakt)) {
-                                $uuid = $order->getUuid();
-                                $this->entityManager->clear();
-                                $order = $catalogOrderService->read(['uuid' => $uuid]);
+                                if (in_array($type, ['rezervTel', 'reserve']) || ($numberDoc && $numberDocStr && $idKontakt)) {
+                                    $uuid = $order->getUuid();
+                                    $this->entityManager->clear();
+                                    $order = $catalogOrderService->read(['uuid' => $uuid]);
 
-                                if (!$order->getExternalId()) {
-                                    $response = $response->withJson(['exception' => $order->getSystem()]);
-                                    $catalogOrderService->delete($order);
+                                    if (!$order->getExternalId()) {
+                                        $response = $response->withJson(['exception' => $order->getSystem()]);
+                                        $catalogOrderService->delete($order);
 
-                                    return $response;
+                                        return $response;
+                                    }
                                 }
                             }
+                        } catch (OrderNotFoundException $e) {
+                            // nothing
                         }
-                    } catch (OrderNotFoundException $e) {
-                        // nothing
                     }
-                }
 
-                break;
+                    break;
 
-            case 'cup:catalog:product:edit':
-            case 'cup:catalog:data:import':
-                if ($request->isPost() && $this->parameter('TradeMasterPlugin_auto_update', 'off') === 'on') {
-                    // add task upload products
-                    $task = new \Plugin\TradeMaster\Tasks\CatalogUploadTask($this->container);
-                    $task->execute(['only_updated' => true]);
-                }
+                case 'cup:catalog:product:edit':
+                case 'cup:catalog:data:import':
+                    if ($request->isPost() && $this->parameter('TradeMasterPlugin_auto_update', 'off') === 'on') {
+                        // add task upload products
+                        $task = new \Plugin\TradeMaster\Tasks\CatalogUploadTask($this->container);
+                        $task->execute(['only_updated' => true]);
+                    }
 
-                break;
+                    break;
+            }
         }
 
         return $response;
