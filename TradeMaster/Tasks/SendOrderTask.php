@@ -142,7 +142,6 @@ class SendOrderTask extends AbstractTask
                                 $task = new \App\Domain\Tasks\SendMailTask($this->container);
                                 $task->execute([
                                     'to' => $order->getEmail(),
-                                    'bcc' => 'mail@box-chocolate.ru',
                                     'body' => $this->render($tpl, ['order' => $order, 'products' => $products]),
                                     'isHtml' => true,
                                 ]);
