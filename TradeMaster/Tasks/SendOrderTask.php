@@ -124,7 +124,7 @@ class SendOrderTask extends AbstractTask
                         'idKontakt' => $args['idKontakt'],
                         'nomDoc' => $args['numberDoc'],
                         'nomerStr' => $args['numberDocStr'],
-                        'nalich' => $this->parameter('TradeMasterPlugin_check_stock', 'on') ? 1 : 0,
+                        'nalich' => $this->parameter('TradeMasterPlugin_check_stock', 'on') === 'on' ? 1 : 0,
                     ],
                 ]);
 
