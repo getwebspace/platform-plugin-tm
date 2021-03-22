@@ -208,10 +208,10 @@ class TradeMasterPlugin extends AbstractPlugin
                 'type' => 'select',
                 'name' => 'check_stock',
                 'args' => [
-                    'selected' => '1',
+                    'selected' => 'on',
                     'option' => [
-                        '1' => 'Да',
-                        '0' => 'Нет',
+                        'on' => 'Да',
+                        'off' => 'Нет',
                     ],
                 ],
             ]);
