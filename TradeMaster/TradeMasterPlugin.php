@@ -18,7 +18,7 @@ class TradeMasterPlugin extends AbstractPlugin
     const DESCRIPTION = 'Плагин реализует функционал интеграции с системой торгово-складского учета.';
     const AUTHOR = 'Aleksey Ilyin';
     const AUTHOR_SITE = 'https://u4et.ru/trademaster';
-    const VERSION = '2.3';
+    const VERSION = '2.5';
 
     public function __construct(ContainerInterface $container)
     {
@@ -177,6 +177,7 @@ class TradeMasterPlugin extends AbstractPlugin
                     ],
                 ],
             ]);
+
             $this->addSettingsField([
                 'label' => 'Шаблон письма клиенту',
                 'description' => 'Если значения нет, письмо не будет отправляться',
@@ -184,6 +185,34 @@ class TradeMasterPlugin extends AbstractPlugin
                 'name' => 'mail_client_template',
                 'args' => [
                     'placeholder' => 'catalog.mail.client.twig',
+                ],
+            ]);
+
+            $this->addSettingsField([
+                'label' => 'Оптовая стоимость',
+                'description' => 'Для зарегистрированных пользователей отправлять оптовую стоимость продукта',
+                'type' => 'select',
+                'name' => 'price_select',
+                'args' => [
+                    'selected' => 'off',
+                    'option' => [
+                        'off' => 'Использовать розничную',
+                        'on' => 'Да',
+                    ],
+                ],
+            ]);
+
+            $this->addSettingsField([
+                'label' => 'Проверка наличия',
+                'description' => 'При работе с резервами будет проходить дополнительная проверка наличия продукта на складе',
+                'type' => 'select',
+                'name' => 'check_stock',
+                'args' => [
+                    'selected' => '1',
+                    'option' => [
+                        '1' => 'Да',
+                        '0' => 'Нет',
+                    ],
                 ],
             ]);
         }

@@ -55,6 +55,9 @@ class SendOrderTask extends AbstractTask
                     return $this->setStatusCancel();
                 }
 
+                // получение пользователя
+                $user = $order->getUser();
+
                 $productService = \App\Domain\Service\Catalog\ProductService::getWithContainer($this->container);
                 $products = [];
 
@@ -62,17 +65,20 @@ class SendOrderTask extends AbstractTask
                 foreach ($productService->read(['uuid' => array_keys($order->getList())]) as $model) {
                     if ($model->getExternalId()) {
                         $quantity = $order->getList()[$model->getUuid()->toString()];
+                        $price = $model->getPrice();
+
+                        if ($this->parameter('TradeMasterPlugin_price_select', 'off') === 'on' && $user) {
+                            $price = $model->getPriceWholesale();
+                        }
+
                         $products[] = [
                             'id' => $model->getExternalId(),
                             'name' => $model->getTitle(),
                             'quantity' => $quantity,
-                            'price' => (float) $model->getPrice() * $quantity,
+                            'price' => (float) $price * $quantity,
                         ];
                     }
                 }
-
-                // получение пользователя
-                $user = $order->getUser();
 
                 // выбор куда отправлять заказ
                 switch (true) {
@@ -118,6 +124,7 @@ class SendOrderTask extends AbstractTask
                         'idKontakt' => $args['idKontakt'],
                         'nomDoc' => $args['numberDoc'],
                         'nomerStr' => $args['numberDocStr'],
+                        'nalich' => $this->parameter('TradeMasterPlugin_check_stock', '1')
                     ],
                 ]);
 
