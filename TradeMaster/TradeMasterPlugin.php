@@ -6,7 +6,6 @@ use App\Domain\AbstractPlugin;
 use App\Domain\Entities\User;
 use App\Domain\Service\Catalog\Exception\OrderNotFoundException;
 use App\Domain\Service\Catalog\OrderService as CatalogOrderService;
-use App\Domain\Service\Parameter\ParameterService;
 use Psr\Container\ContainerInterface;
 use Slim\Http\Request;
 use Slim\Http\Response;
@@ -18,7 +17,7 @@ class TradeMasterPlugin extends AbstractPlugin
     const DESCRIPTION = 'Плагин реализует функционал интеграции с системой торгово-складского учета.';
     const AUTHOR = 'Aleksey Ilyin';
     const AUTHOR_SITE = 'https://u4et.ru/trademaster';
-    const VERSION = '2.5';
+    const VERSION = '3.0';
 
     public function __construct(ContainerInterface $container)
     {
@@ -284,7 +283,7 @@ class TradeMasterPlugin extends AbstractPlugin
                                 'user' => $request->getAttribute('user', null),
                                 'external_id' => [''],
                                 'order' => ['date' => 'desc'],
-                                'limit' => 1
+                                'limit' => 1,
                             ])->first();
 
                             if ($order) {
