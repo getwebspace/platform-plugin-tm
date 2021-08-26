@@ -17,7 +17,7 @@ class TradeMasterPlugin extends AbstractPlugin
     const DESCRIPTION = 'Плагин реализует функционал интеграции с системой торгово-складского учета.';
     const AUTHOR = 'Aleksey Ilyin';
     const AUTHOR_SITE = 'https://u4et.ru/trademaster';
-    const VERSION = '3.0';
+    const VERSION = '4.0';
 
     public function __construct(ContainerInterface $container)
     {

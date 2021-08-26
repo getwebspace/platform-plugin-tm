@@ -61,23 +61,20 @@ class SendOrderTask extends AbstractTask
                 $productService = \App\Domain\Service\Catalog\ProductService::getWithContainer($this->container);
                 $products = [];
 
-                /** @var \App\Domain\Entities\Catalog\Product $model */
-                foreach ($productService->read(['uuid' => array_keys($order->getList())]) as $model) {
-                    if ($model->getExternalId()) {
-                        $quantity = $order->getList()[$model->getUuid()->toString()];
-                        $price = $model->getPrice();
+                // готовим список товаров
+                foreach ($order->getProducts()->where('external_id', '!=', '') as $product) {
+                    $price = $product->getPrice();
 
-                        if ($this->parameter('TradeMasterPlugin_price_select', 'off') === 'on' && $user) {
-                            $price = $model->getPriceWholesale();
-                        }
-
-                        $products[] = [
-                            'id' => $model->getExternalId(),
-                            'name' => $model->getTitle(),
-                            'quantity' => $quantity,
-                            'price' => (float) $price * $quantity,
-                        ];
+                    if ($this->parameter('TradeMasterPlugin_price_select', 'off') === 'on' && $user) {
+                        $price = $product->getPriceWholesale();
                     }
+
+                    $products[] = [
+                        'id' => $product->getExternalId(),
+                        'name' => $product->getTitle(),
+                        'quantity' => $product->getCount(),
+                        'price' => (float) $price * $product->getCount(),
+                    ];
                 }
 
                 // выбор куда отправлять заказ
