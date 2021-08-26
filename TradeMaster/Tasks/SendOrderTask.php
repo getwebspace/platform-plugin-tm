@@ -7,6 +7,7 @@ use App\Domain\Service\Catalog\OrderService as CatalogOrderService;
 use App\Domain\Service\Catalog\Exception\OrderNotFoundException;
 use App\Domain\Service\User\Exception\UserNotFoundException;
 use App\Domain\Service\User\UserService;
+use DateTimeZone;
 
 class SendOrderTask extends AbstractTask
 {
