@@ -138,7 +138,6 @@ class SendOrderTask extends AbstractTask
                         }
                         if ($result['nomerZakaza'] != '-1') {
                             $catalogOrderService->update($order, ['external_id' => $result['nomerZakaza']]);
-                            $products = $productService->read(['uuid' => array_keys($order->getList())]);
 
                             // письмо клиенту и админу
                             if (
@@ -150,7 +149,7 @@ class SendOrderTask extends AbstractTask
                                 $task->execute([
                                     'to' => $order->getEmail(),
                                     'bcc' => $this->parameter('smtp_from', ''),
-                                    'body' => $this->render($tpl, ['order' => $order, 'products' => $products]),
+                                    'body' => $this->render($tpl, ['order' => $order]),
                                     'isHtml' => true,
                                 ]);
 
