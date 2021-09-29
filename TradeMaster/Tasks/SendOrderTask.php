@@ -99,6 +99,14 @@ class SendOrderTask extends AbstractTask
                     }
                 }
 
+                // проверка наличия, в зависимости от параметра
+                switch ($this->parameter('TradeMasterPlugin_check_stock', 'on')){
+                    default:
+                    case 'on': $nalich = 1; break;
+                    case 'user-only': $nalich = ($user ? 1 : 0); break;
+                    case 'off': $nalich = 0; break;
+                }
+
                 $result = $this->trademaster->api([
                     'method' => 'POST',
                     'endpoint' => $endpoint,
@@ -123,7 +131,7 @@ class SendOrderTask extends AbstractTask
                         'idKontakt' => $args['idKontakt'],
                         'nomDoc' => $args['numberDoc'],
                         'nomerStr' => $args['numberDocStr'],
-                        'nalich' => $this->parameter('TradeMasterPlugin_check_stock', 'on') === 'on' ? 1 : 0,
+                        'nalich' => $nalich,
                     ],
                 ]);
 
