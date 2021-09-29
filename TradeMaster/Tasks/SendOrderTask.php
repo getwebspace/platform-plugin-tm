@@ -59,7 +59,6 @@ class SendOrderTask extends AbstractTask
                 // получение пользователя
                 $user = $order->getUser();
 
-                $productService = \App\Domain\Service\Catalog\ProductService::getWithContainer($this->container);
                 $products = [];
 
                 // готовим список товаров
