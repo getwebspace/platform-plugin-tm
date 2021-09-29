@@ -17,7 +17,7 @@ class TradeMasterPlugin extends AbstractPlugin
     const DESCRIPTION = 'Плагин реализует функционал интеграции с системой торгово-складского учета.';
     const AUTHOR = 'Aleksey Ilyin';
     const AUTHOR_SITE = 'https://u4et.ru/trademaster';
-    const VERSION = '4.0';
+    const VERSION = '4.1';
 
     public function __construct(ContainerInterface $container)
     {
@@ -203,13 +203,14 @@ class TradeMasterPlugin extends AbstractPlugin
 
             $this->addSettingsField([
                 'label' => 'Проверка наличия',
-                'description' => 'При работе с резервами будет проходить дополнительная проверка наличия продукта на складе',
+                'description' => 'Дополнительная проверка наличия продукта на складе',
                 'type' => 'select',
                 'name' => 'check_stock',
                 'args' => [
                     'selected' => 'on',
                     'option' => [
-                        'on' => 'Да',
+                        'on' => 'Для всех',
+                        'user-only' => 'Только для пользователей',
                         'off' => 'Нет',
                     ],
                 ],
