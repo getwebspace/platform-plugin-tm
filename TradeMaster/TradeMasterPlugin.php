@@ -178,6 +178,20 @@ class TradeMasterPlugin extends AbstractPlugin
             ]);
 
             $this->addSettingsField([
+                'label' => 'Обновлять поисковый индекс',
+                'description' => 'Включить чтобы обновить индекс после синхронизации',
+                'type' => 'select',
+                'name' => 'search',
+                'args' => [
+                    'selected' => 'off',
+                    'option' => [
+                        'off' => 'Выключена',
+                        'on' => 'Включена',
+                    ],
+                ],
+            ]);
+
+            $this->addSettingsField([
                 'label' => 'Шаблон письма клиенту',
                 'description' => 'Если значения нет, письмо не будет отправляться',
                 'type' => 'text',

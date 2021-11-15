@@ -88,6 +88,15 @@ class CatalogDownloadTask extends AbstractTask
                 \App\Domain\AbstractTask::worker($task);
             }
 
+            if ($this->parameter('TradeMasterPlugin_search', 'off') === 'on') {
+                // re index searvh
+                $task = new \App\Domain\Tasks\SearchIndexTask($this->container);
+                $task->execute();
+
+                // run worker
+                \App\Domain\AbstractTask::worker($task);
+            }
+
             $this->setProgress(100);
         } catch (\Exception $exception) {
             $this->logger->error($exception->getMessage(), ['n' => get_class($exception), 'file' => $exception->getFile(), 'line' => $exception->getLine(), 'trace' => $exception->getTraceAsString()]);
