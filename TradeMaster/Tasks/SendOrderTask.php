@@ -107,6 +107,9 @@ class SendOrderTask extends AbstractTask
                     case 'off': $nalich = 0; break;
                 }
 
+                // адрес страницы заказа
+                $so = $this->parameter('common_homepage', '') . 'cart/done/' . $order->getUuid()->toString();
+
                 $result = $this->trademaster->api([
                     'method' => 'POST',
                     'endpoint' => $endpoint,
@@ -124,14 +127,15 @@ class SendOrderTask extends AbstractTask
                         'other1Kontakt' => $order->getEmail(),
                         'other2Kontakt' => !empty($args['passport']) ? $args['passport'] : ($user ? $user->getAdditional() : ''),
                         'dateDost' => $order
-                                        ->getShipping()
-                                        ->setTimezone(new DateTimeZone($this->parameter('common_timezone', 'UTC'))),
+                            ->getShipping()
+                            ->setTimezone(new DateTimeZone($this->parameter('common_timezone', 'UTC'))),
                         'komment' => $order->getComment(),
                         'tovarJson' => json_encode($products, JSON_UNESCAPED_UNICODE),
                         'idKontakt' => $args['idKontakt'],
                         'nomDoc' => $args['numberDoc'],
                         'nomerStr' => $args['numberDocStr'],
                         'nalich' => $nalich,
+                        'so' => $so,
                     ],
                 ]);
 
@@ -147,15 +151,12 @@ class SendOrderTask extends AbstractTask
                             $catalogOrderService->update($order, ['external_id' => $result['nomerZakaza']]);
 
                             // письмо клиенту и админу
-                            if (
-                                $order->getEmail() &&
-                                ($tpl = $this->parameter('TradeMasterPlugin_mail_client_template', '')) !== ''
-                            ) {
+                            if ($tpl = $this->parameter('TradeMasterPlugin_mail_client_template', '') !== '') {
                                 // add task send client mail
                                 $task = new \App\Domain\Tasks\SendMailTask($this->container);
                                 $task->execute([
-                                    'to' => $order->getEmail(),
-                                    'bcc' => $this->parameter('smtp_from', ''),
+                                    'to' => $order->getEmail() ? $order->getEmail() : $this->parameter('smtp_from', ''),
+                                    'bcc' => $order->getEmail() ? $this->parameter('smtp_from', '') : null,
                                     'body' => $this->render($tpl, ['order' => $order]),
                                     'isHtml' => true,
                                 ]);

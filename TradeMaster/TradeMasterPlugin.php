@@ -17,7 +17,7 @@ class TradeMasterPlugin extends AbstractPlugin
     const DESCRIPTION = 'Плагин реализует функционал интеграции с системой торгово-складского учета.';
     const AUTHOR = 'Aleksey Ilyin';
     const AUTHOR_SITE = 'https://u4et.ru/trademaster';
-    const VERSION = '4.1';
+    const VERSION = '4.3';
 
     public function __construct(ContainerInterface $container)
     {
@@ -202,6 +202,16 @@ class TradeMasterPlugin extends AbstractPlugin
             ]);
 
             $this->addSettingsField([
+                'label' => 'Шаблон письма заказа',
+                'description' => 'Если значения нет, письмо не будет отправляться',
+                'type' => 'text',
+                'name' => 'mail_order_template',
+                'args' => [
+                    'placeholder' => 'catalog.mail.order.twig',
+                ],
+            ]);
+
+            $this->addSettingsField([
                 'label' => 'Оптовая стоимость',
                 'description' => 'Для зарегистрированных пользователей отправлять оптовую стоимость продукта',
                 'type' => 'select',
@@ -217,7 +227,7 @@ class TradeMasterPlugin extends AbstractPlugin
 
             $this->addSettingsField([
                 'label' => 'Проверка наличия',
-                'description' => 'Дополнительная проверка наличия продукта на складе',
+                'description' => 'При работе с резервами будет проходить дополнительная проверка наличия продукта на складе',
                 'type' => 'select',
                 'name' => 'check_stock',
                 'args' => [
@@ -230,6 +240,60 @@ class TradeMasterPlugin extends AbstractPlugin
                 ],
             ]);
         }
+
+        // send order confirm
+        $this
+            ->map([
+                'methods' => ['post'],
+                'pattern' => '/cart/confirm',
+                'handler' => function (Request $req, Response $res) use ($container) {
+                    $default = [
+                        'nomer' => '',
+                        'user' => false,
+                        'products' => [],
+                    ];
+                    $data = array_merge($default, $req->getParams(['nomer']));
+
+                    if (($user = $req->getAttribute('user', false)) !== false) {
+                        $data['user'] = $user;
+                    }
+
+                    if ($data['nomer'] && $data['user']) {
+                        $data['products'] = $this->api([
+                            'endpoint' => 'order/getSchet',
+                            'params' => ['nomer' => $data['nomer']],
+                        ]);
+
+                        if ($data['products']) {
+                            $renderer = $container->get('view');
+
+                            if (($path = realpath(THEME_DIR . '/' . $this->parameter('common_theme', 'default'))) !== false) {
+                                $renderer->getLoader()->addPath($path);
+                            }
+
+                            // письмо клиенту и админу
+                            if (
+                                $data['user']->getEmail() &&
+                                ($tpl = $this->parameter('TradeMasterPlugin_mail_order_template', '')) !== ''
+                            ) {
+                                $task = new \App\Domain\Tasks\SendMailTask($this->container);
+                                $task->execute([
+                                    'to' => $data['user']->getEmail(),
+                                    'bcc' => $this->parameter('smtp_from', ''),
+                                    'body' => $renderer->fetch($tpl, $data),
+                                    'isHtml' => true,
+                                ]);
+                                \App\Domain\AbstractTask::worker($task);
+
+                                return $res->withJson(['1']);
+                            }
+                        }
+                    }
+
+                    return $res->withJson(['0']);
+                },
+            ])
+            ->setName('common:tm:confirm');
 
         // api for plugin config
         $this
