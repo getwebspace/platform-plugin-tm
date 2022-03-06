@@ -151,7 +151,7 @@ class SendOrderTask extends AbstractTask
                             $catalogOrderService->update($order, ['external_id' => $result['nomerZakaza']]);
 
                             // письмо клиенту и админу
-                            if ($tpl = $this->parameter('TradeMasterPlugin_mail_client_template', '') !== '') {
+                            if (($tpl = $this->parameter('TradeMasterPlugin_mail_client_template', '')) !== '') {
                                 // add task send client mail
                                 $task = new \App\Domain\Tasks\SendMailTask($this->container);
                                 $task->execute([
