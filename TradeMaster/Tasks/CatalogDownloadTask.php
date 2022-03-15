@@ -132,6 +132,10 @@ class CatalogDownloadTask extends AbstractTask
                 'field2' => $item['ind2'],
                 'field3' => $item['ind3'],
                 'template' => $template,
+                'sort' => [
+                    'by' => $this->parameter('catalog_sort_by', 'title'),
+                    'direction' => $this->parameter('catalog_sort_direction', 'ASC'),
+                ],
                 'meta' => [
                     'title' => $item['nameZvena'],
                     'description' => strip_tags(urldecode($item['opisanie'])),
