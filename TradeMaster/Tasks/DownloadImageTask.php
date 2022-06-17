@@ -62,10 +62,10 @@ class DownloadImageTask extends AbstractTask
     protected function action(array $args = []): void
     {
         $this->trademaster = $this->container->get('TradeMasterPlugin');
-        $this->categoryService = CategoryService::getWithContainer($this->container);
-        $this->productService = ProductService::getWithContainer($this->container);
-        $this->fileService = FileService::getWithContainer($this->container);
-        $this->fileRelationService = FileRelationService::getWithContainer($this->container);
+        $this->categoryService = $this->container->get(CategoryService::class);
+        $this->productService = $this->container->get(ProductService::class);
+        $this->fileService = $this->container->get(FileService::class);
+        $this->fileRelationService = $this->container->get(FileRelationService::class);
 
         if ($this->parameter('file_is_enabled', 'no') === 'yes') {
             foreach ($args['list'] as $index => $item) {
@@ -129,6 +129,9 @@ class DownloadImageTask extends AbstractTask
             // run worker
             \App\Domain\AbstractTask::worker($task);
         }
+
+        $this->container->get(\App\Application\PubSub::class)->publish('task:tm:download:image');
+        $this->container->get(\App\Application\PubSub::class)->publish('task:catalog:import');
 
         $this->setStatusDone();
     }

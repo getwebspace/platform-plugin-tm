@@ -35,12 +35,13 @@
         // config worker
         document.addEventListener('DOMContentLoaded', () => {
             let $btn = $('[name="TradeMasterPlugin[update]"]'),
-                $spin = $('<i class="fas fa-sync fa-spin ml-3"></i>');
+                $spin = $('<i class="fas fa-sync fa-spin ml-3"></i>'),
+                key = $('[name="TradeMasterPlugin[key]"]');
 
             $btn.on('click', () => {
                 $spin.insertAfter($btn.prop('disabled', true));
 
-                $.getJSON('/api/trademaster/config', (res) => {
+                $.post('/api/trademaster/config', {key: key.val()}, (res) => {
                     if (res) {
                         for (let field in res) {
                             if (res.hasOwnProperty(field)) {

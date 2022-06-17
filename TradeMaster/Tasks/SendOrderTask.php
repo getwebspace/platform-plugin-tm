@@ -8,6 +8,7 @@ use App\Domain\Service\Catalog\Exception\OrderNotFoundException;
 use App\Domain\Service\User\Exception\UserNotFoundException;
 use App\Domain\Service\User\UserService;
 use DateTimeZone;
+use Plugin\TradeMaster\TradeMasterPlugin;
 
 class SendOrderTask extends AbstractTask
 {
@@ -28,25 +29,11 @@ class SendOrderTask extends AbstractTask
         return parent::execute($params);
     }
 
-    /**
-     * @var \Plugin\TradeMaster\TradeMasterPlugin
-     */
-    protected $trademaster;
-
-    /**
-     * @var \Doctrine\Common\Persistence\ObjectRepository|\Doctrine\ORM\EntityRepository
-     */
-    protected $productRepository;
-
-    /**
-     * @var \Doctrine\Common\Persistence\ObjectRepository|\Doctrine\ORM\EntityRepository
-     */
-    protected $orderRepository;
-
     protected function action(array $args = [])
     {
-        $this->trademaster = $this->container->get('TradeMasterPlugin');
-        $catalogOrderService = CatalogOrderService::getWithContainer($this->container);
+        /** @var TradeMasterPlugin $trademaster */
+        $trademaster = $this->container->get('TradeMasterPlugin');
+        $catalogOrderService = $this->container->get(CatalogOrderService::class);
 
         try {
             $order = $catalogOrderService->read(['uuid' => $args['uuid']]);
@@ -77,42 +64,12 @@ class SendOrderTask extends AbstractTask
                     ];
                 }
 
-                // выбор куда отправлять заказ
-                switch (true) {
-                    case in_array($args['type'], ['rezervTel', 'reserve'], true):
-                    {
-                        $endpoint = 'order/cart/rezervTel';
-
-                        if (!empty($args['numberDoc'])) {
-                            $endpoint = 'custom/addRezervTovarTblKontaktSite';
-                        }
-                        break;
-                    }
-                    case in_array($args['type'], ['kpTel', 'order'], true):
-                    {
-                        $endpoint = 'order/cart/kpTel';
-                        break;
-                    }
-                    default:
-                    {
-                        $endpoint = 'order/cart/anonym';
-                    }
-                }
-
-                // проверка наличия, в зависимости от параметра
-                switch ($this->parameter('TradeMasterPlugin_check_stock', 'on')){
-                    default:
-                    case 'on': $nalich = 1; break;
-                    case 'user-only': $nalich = ($user ? 1 : 0); break;
-                    case 'off': $nalich = 0; break;
-                }
-
                 // адрес страницы заказа
-                $so = $this->parameter('common_homepage', '') . 'cart/done/' . $order->getUuid()->toString();
+                $so = $this->parameter('common_homepage', '') . '/cart/done/' . $order->getUuid()->toString();
 
-                $result = $this->trademaster->api([
+                $result = $trademaster->api([
                     'method' => 'POST',
-                    'endpoint' => $endpoint,
+                    'endpoint' => 'order/cart/anonym',
                     'params' => [
                         'sklad' => $this->parameter('TradeMasterPlugin_storage'),
                         'urlico' => $this->parameter('TradeMasterPlugin_legal'),
@@ -134,7 +91,7 @@ class SendOrderTask extends AbstractTask
                         'idKontakt' => $args['idKontakt'],
                         'nomDoc' => $args['numberDoc'],
                         'nomerStr' => $args['numberDocStr'],
-                        'nalich' => $nalich,
+                        'nalich' => 0,
                         'so' => $so,
                     ],
                 ]);

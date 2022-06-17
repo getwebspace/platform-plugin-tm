@@ -31,9 +31,6 @@ class CatalogUploadTask extends AbstractTask
      */
     protected ProductService $productService;
 
-    /**
-     * @throws \RunTracy\Helpers\Profiler\Exception\ProfilerException
-     */
     protected function action(array $args = []): void
     {
         $this->trademaster = $this->container->get('TradeMasterPlugin');

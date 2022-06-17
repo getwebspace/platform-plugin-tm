@@ -1,16 +1,15 @@
-TradeMaster для WebSpace Engine
+TradeMaster for WebSpace Engine
 ====
-####(Плагин)
+####(Plugin)
 
-Плагин реализует функционал интеграции с системой торгово-складского учета.
+The plugin implements the functionality of integration with the system of trade and warehouse accounting.
 
 #### Установка
-Поместить в папку `plugin` и подключить в `index.php` добавив строку:
+Place it in the `plugin` folder and include it in `installed.php` by adding the line:
 ```php
 // tm plugin
-$plugins->register(new \Plugin\TradeMaster\TradeMasterPlugin($container));
+$plugins->register(\Plugin\TradeMaster\TradeMasterPlugin::class);
 ```
-
 
 #### License
 Licensed under the MIT license. See [License File](LICENSE.md) for more information.

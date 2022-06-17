@@ -5,11 +5,13 @@ namespace Plugin\TradeMaster\Tasks;
 use App\Domain\AbstractService;
 use App\Domain\AbstractTask;
 use App\Domain\Service\Catalog\CategoryService;
+use App\Domain\Service\Catalog\CategoryService as CatalogCategoryService;
 use App\Domain\Service\Catalog\Exception\AddressAlreadyExistsException;
 use App\Domain\Service\Catalog\Exception\CategoryNotFoundException;
 use App\Domain\Service\Catalog\Exception\MissingTitleValueException;
 use App\Domain\Service\Catalog\Exception\TitleAlreadyExistsException;
 use App\Domain\Service\Catalog\ProductService;
+use App\Domain\Service\Catalog\ProductService as CatalogProductService;
 use Plugin\TradeMaster\TradeMasterPlugin;
 use Illuminate\Support\Collection;
 
@@ -47,6 +49,11 @@ class CatalogDownloadTask extends AbstractTask
      */
     private array $downloadImages = [];
 
+    protected static function map(int $x, int $in_min, int $in_max, int $out_min, int $out_max): float
+    {
+        return ($x - $in_min) * ($out_max - $out_min) / ($in_max - $in_min) + $out_min;
+    }
+
     /**
      * @param array $args
      *
@@ -55,29 +62,23 @@ class CatalogDownloadTask extends AbstractTask
     protected function action(array $args = [])
     {
         $this->trademaster = $this->container->get('TradeMasterPlugin');
-        $this->categoryService = CategoryService::getWithContainer($this->container);
-        $this->productService = ProductService::getWithContainer($this->container);
+        $this->categoryService = $this->container->get(CatalogCategoryService::class);
+        $this->productService = $this->container->get(CatalogProductService::class);
 
         try {
             $categories = $this->categoryService->read(['export' => 'trademaster']);
             $products = $this->productService->read(['export' => 'trademaster']);
 
             $this->setProgress(1);
-            \RunTracy\Helpers\Profiler\Profiler::start('task:tm:category');
             $this->category($categories);
-            \RunTracy\Helpers\Profiler\Profiler::finish('task:tm:category');
 
-            $this->setProgress(50);
-            \RunTracy\Helpers\Profiler\Profiler::start('task:tm:product');
+            $this->setProgress(20);
             $this->product($categories, $products);
-            \RunTracy\Helpers\Profiler\Profiler::finish('task:tm:product');
-
-            $this->setProgress(80);
-            \RunTracy\Helpers\Profiler\Profiler::start('task:tm:remove');
-            $this->remove($categories, $products);
-            \RunTracy\Helpers\Profiler\Profiler::finish('task:tm:remove');
 
             $this->setProgress(90);
+            $this->remove($categories, $products);
+
+            $this->setProgress(95);
 
             if ($this->downloadImages) {
                 // download images
@@ -89,7 +90,7 @@ class CatalogDownloadTask extends AbstractTask
             }
 
             if ($this->parameter('TradeMasterPlugin_search', 'off') === 'on') {
-                // re index searvh
+                // reindex search
                 $task = new \App\Domain\Tasks\SearchIndexTask($this->container);
                 $task->execute();
 
@@ -120,7 +121,7 @@ class CatalogDownloadTask extends AbstractTask
 
         $list = $this->trademaster->api(['endpoint' => 'catalog/list']);
 
-        foreach ($list as $item) {
+        foreach ($list as $index => $item) {
             $data = [
                 'status' => \App\Domain\Types\Catalog\CategoryStatusType::STATUS_WORK,
                 'external_id' => $item['idZvena'],
@@ -259,7 +260,7 @@ class CatalogDownloadTask extends AbstractTask
                 ]);
 
                 // полученные данные проверяем и записываем в модели товара
-                foreach ($list as $item) {
+                foreach ($list as $index => $item) {
                     $data = [
                         'status' => \App\Domain\Types\Catalog\ProductStatusType::STATUS_WORK,
                         'external_id' => $item['idTovar'],
@@ -353,6 +354,8 @@ class CatalogDownloadTask extends AbstractTask
                             ];
                         }
                     }
+
+                    $this->setProgress(static::map($step * $i + $index, 0, $count, 21, 89));
                 }
 
                 $i++;
