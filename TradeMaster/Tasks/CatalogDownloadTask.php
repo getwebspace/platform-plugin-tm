@@ -196,9 +196,14 @@ class CatalogDownloadTask extends AbstractTask
 
         // find parent category
         foreach ($categories as $category) {
-            if (+$category->buf && ($parent = $categories->firstWhere('external_id', $category->buf)) !== null) {
-                /** @var \App\Domain\Entities\Catalog\Category $parent */
-                $this->categoryService->update($category, ['parent' => $parent->getUuid()]);
+            if (+$category->buf) {
+                if (($parent = $categories->firstWhere('external_id', $category->buf)) !== null) {
+                    /** @var \App\Domain\Entities\Catalog\Category $parent */
+                    $this->categoryService->update($category, ['parent' => $parent->getUuid()]);
+                } else {
+                    $this->categoryService->update($category, ['status' => \App\Domain\Types\Catalog\CategoryStatusType::STATUS_DELETE]);
+                    $this->logger->warning('TradeMaster: parent category not found, delete', ['parent' => $category->buf]);
+                }
             }
         }
 
