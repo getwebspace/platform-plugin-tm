@@ -46,7 +46,8 @@ class CartConfirm extends AbstractAction
                     $task->execute([
                         'to' => $data['user']->getEmail(),
                         'bcc' => $this->parameter('smtp_from', ''),
-                        'body' => $renderer->fetch($tpl, $data),
+                        'template' => $tpl,
+                        'data' => $data,
                         'isHtml' => true,
                     ]);
                     \App\Domain\AbstractTask::worker($task);

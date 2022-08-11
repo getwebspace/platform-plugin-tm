@@ -14,7 +14,7 @@ class TradeMasterPlugin extends AbstractPlugin
     const DESCRIPTION = 'Плагин реализует функционал интеграции с системой торгово-складского учета.';
     const AUTHOR = 'Aleksey Ilyin';
     const AUTHOR_SITE = 'https://u4et.ru/trademaster';
-    const VERSION = '5.0';
+    const VERSION = '5.0.1';
 
     public function __construct(ContainerInterface $container)
     {
@@ -355,7 +355,7 @@ class TradeMasterPlugin extends AbstractPlugin
 
             $this->logger->info('TradeMaster: API apikey', ['apikey' => $apikey]);
             $this->logger->info('TradeMaster: API url', ['path' => $path]);
-            $this->logger->info('TradeMaster: API data', ['data' => json_encode($data['params'], JSON_UNESCAPED_UNICODE)]);
+            $this->logger->info('TradeMaster: API data', ['data' => $data['params']]);
             $this->logger->info('TradeMaster: API result', ['output' => $result]);
 
             return $result ? json_decode($result, true) : [];

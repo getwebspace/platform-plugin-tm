@@ -114,7 +114,8 @@ class SendOrderTask extends AbstractTask
                                 $task->execute([
                                     'to' => $order->getEmail() ? $order->getEmail() : $this->parameter('smtp_from', ''),
                                     'bcc' => $order->getEmail() ? $this->parameter('smtp_from', '') : null,
-                                    'body' => $this->render($tpl, ['order' => $order]),
+                                    'template' => $tpl,
+                                    'data' => ['order' => $order],
                                     'isHtml' => true,
                                 ]);
 
