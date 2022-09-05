@@ -119,7 +119,12 @@ class CatalogDownloadTask extends AbstractTask
         ];
         $pagination = $this->parameter('catalog_category_pagination', 10);
 
-        $list = $this->trademaster->api(['endpoint' => 'catalog/list']);
+        $list = $this->trademaster->api([
+            'endpoint' => 'catalog/list',
+            'params' => [
+                'link' => $this->parameter('TradeMasterPlugin_category_link', ''),
+            ],
+        ]);
 
         foreach ($list as $index => $item) {
             $data = [
@@ -245,7 +250,12 @@ class CatalogDownloadTask extends AbstractTask
     {
         $this->logger->info('Task: TradeMaster get product item');
 
-        $count = $this->trademaster->api(['endpoint' => 'item/count']);
+        $count = $this->trademaster->api([
+            'endpoint' => 'item/count',
+            'params' => [
+                'link' => $this->parameter('TradeMasterPlugin_category_link', ''),
+            ],
+        ]);
 
         if ($count && $count['count']) {
             $count = (int) $count['count'];
@@ -261,6 +271,7 @@ class CatalogDownloadTask extends AbstractTask
                         'sklad' => $this->parameter('TradeMasterPlugin_storage', 0),
                         'offset' => $i * $step,
                         'limit' => $step,
+                        'link' => $this->parameter('TradeMasterPlugin_category_link', ''),
                     ],
                 ]);
 

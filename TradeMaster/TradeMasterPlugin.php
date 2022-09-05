@@ -14,7 +14,7 @@ class TradeMasterPlugin extends AbstractPlugin
     const DESCRIPTION = 'Плагин реализует функционал интеграции с системой торгово-складского учета.';
     const AUTHOR = 'Aleksey Ilyin';
     const AUTHOR_SITE = 'https://u4et.ru/trademaster';
-    const VERSION = '5.0.1';
+    const VERSION = '5.1';
 
     public function __construct(ContainerInterface $container)
     {
@@ -154,6 +154,13 @@ class TradeMasterPlugin extends AbstractPlugin
                 'value' => $this->parameter('TradeMasterPlugin_config', '[]'),
                 'style' => 'display: none;',
             ],
+        ]);
+
+        $this->addSettingsField([
+            'label' => 'Категория по-умолчанию',
+            'description' => 'Выгружает указанную категорию, вложенные подкатегории и товары',
+            'type' => 'text',
+            'name' => 'category_link',
         ]);
 
         $this->addSettingsField([
