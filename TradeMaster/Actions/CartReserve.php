@@ -176,7 +176,7 @@ class CartReserve extends CatalogAction
                                 'to' => $order->getEmail() ?: $this->parameter('mail_from', ''),
                                 'bcc' => $order->getEmail() ? $this->parameter('mail_from', '') : null,
                                 'template' => $tpl,
-                                'data' => ['order' => $order],
+                                'data' => ['order' => $order->getUuid()],
                                 'isHtml' => true,
                             ]);
 
