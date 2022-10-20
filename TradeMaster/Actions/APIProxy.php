@@ -25,7 +25,7 @@ class APIProxy extends AbstractAction
                 'method' => $this->request->getMethod() === 'POST' ? 'POST' : 'GET',
             ]);
 
-            return $this->respondWithJson($array);
+            return $this->respondWithJson((array) $array);
         }
 
         return $this->response->withStatus(405);

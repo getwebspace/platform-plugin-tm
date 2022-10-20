@@ -245,9 +245,7 @@ class TradeMasterPlugin extends AbstractPlugin
             ->map([
                 'methods' => ['get', 'post'],
                 'pattern' => '/api/trademaster/proxy',
-                'handler' => function (Request $req, Response $res) use ($container, $self) {
-
-                },
+                'handler' => \Plugin\TradeMaster\Actions\APIProxy::class,
             ])
             ->setName('api:tm:proxy');
 
