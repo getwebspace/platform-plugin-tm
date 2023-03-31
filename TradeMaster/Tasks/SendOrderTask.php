@@ -65,7 +65,7 @@ class SendOrderTask extends AbstractTask
                 }
 
                 // адрес страницы заказа
-                $so = $this->parameter('common_homepage', '') . '/cart/done/' . $order->getUuid()->toString();
+                $so = $this->parameter('common_homepage', '') . 'cart/done/' . $order->getUuid()->toString();
 
                 $result = $trademaster->api([
                     'method' => 'POST',
@@ -114,8 +114,7 @@ class SendOrderTask extends AbstractTask
                                 $task->execute([
                                     'to' => $order->getEmail() ? $order->getEmail() : $this->parameter('smtp_from', ''),
                                     'bcc' => $order->getEmail() ? $this->parameter('smtp_from', '') : null,
-                                    'data' => ['order' => $order->getUuid()],
-                                    'template' => $tpl,
+                                    'template' => $this->render($tpl, ['order' => $order]),
                                     'isHtml' => true,
                                 ]);
 

@@ -236,7 +236,7 @@ class CatalogDownloadTask extends AbstractTask
                     $address[] = $parent->getAddress();
                 }
 
-                $address[] = $category->setAddress($category->getTitle())->getAddress();
+                $address[] = $category->setAddress(str_replace('/', '-', $category->getTitle()))->getAddress();
                 $service->update($category, ['address' => implode('/', $address)]);
             } catch (AddressAlreadyExistsException $e) {
                 $this->logger->warning('TradeMaster: error when update category address', ['uuid' => $category->getUuid()->toString()]);
@@ -354,7 +354,7 @@ class CatalogDownloadTask extends AbstractTask
                             try {
                                 if (($category = $categories->firstWhere('uuid', $product->getCategory())) !== null) {
                                     /** @var \App\Domain\Entities\Catalog\Product $product */
-                                    $this->productService->update($product, ['address' => $category->getAddress() . '/' . $product->setAddress($product->getTitle())->getAddress()]);
+                                    $this->productService->update($product, ['address' => $category->getAddress() . '/' . $product->setAddress(str_replace('/', '-', $product->getTitle()))->getAddress()]);
                                 }
                             } catch (AddressAlreadyExistsException $e) {
                                 $this->logger->warning('TradeMaster: error when update product address', ['uuid' => $product->getUuid()->toString()]);
