@@ -13,7 +13,7 @@ class APIProxy extends AbstractAction
             'endpoint' => '',
             'params' => [],
         ];
-        $data = array_merge($default, $this->request->getQueryParams());
+        $data = array_merge($default, $this->request->getQueryParams(), (array) ($this->request->getParsedBody() ?? []));
 
         if ($data['endpoint']) {
             /** @var TradeMasterPlugin $tm */
