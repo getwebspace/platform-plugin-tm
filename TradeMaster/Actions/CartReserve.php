@@ -36,6 +36,8 @@ class CartReserve extends CatalogAction
 
             'type' => $this->getParam('type', ''),
             'idKontakt' => $this->getParam('idKontakt', ''),
+            'idDenSred' => $this->getParam('idDenSred', $this->parameter('TradeMasterPlugin_checkout')),
+            'idKontragent' => $this->getParam('idKontragent', $this->parameter('TradeMasterPlugin_contractor')),
             'passport' => $this->getParam('passport', ''),
             'numberDoc' => $this->getParam('numberDoc', ''),
             'numberDocStr' => $this->getParam('numberDocStr', ''),
@@ -111,8 +113,8 @@ class CartReserve extends CatalogAction
                 'params' => [
                     'sklad' => $this->parameter('TradeMasterPlugin_storage'),
                     'urlico' => $this->parameter('TradeMasterPlugin_legal'),
-                    'ds' => $this->parameter('TradeMasterPlugin_checkout'),
-                    'kontragent' => $this->parameter('TradeMasterPlugin_contractor'),
+                    'ds' => $data['idDenSred'],
+                    'kontragent' => $data['idKontragent'],
                     'shema' => $this->parameter('TradeMasterPlugin_scheme'),
                     'valuta' => $this->parameter('TradeMasterPlugin_currency'),
                     'userID' => $this->parameter('TradeMasterPlugin_user'),
