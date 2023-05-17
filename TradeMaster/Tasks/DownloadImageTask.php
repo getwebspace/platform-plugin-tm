@@ -101,7 +101,7 @@ class DownloadImageTask extends AbstractTask
 
                                 if ($file->getInternalPath('full') === $file->getInternalPath('middle')) {
                                     // is image
-                                    if (str_start_with($file->getType(), 'image/')) {
+                                    if (str_starts_with($file->getType(), 'image/')) {
                                         $this->convertImageUuids[] = $file->getUuid();
                                     }
                                 }
