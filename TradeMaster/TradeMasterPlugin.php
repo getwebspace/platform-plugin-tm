@@ -14,7 +14,7 @@ class TradeMasterPlugin extends AbstractPlugin
     const DESCRIPTION = 'Плагин реализует функционал интеграции с системой торгово-складского учета.';
     const AUTHOR = 'Aleksey Ilyin';
     const AUTHOR_SITE = 'https://u4et.ru/trademaster';
-    const VERSION = '5.2';
+    const VERSION = '6.0';
 
     public function __construct(ContainerInterface $container)
     {
@@ -278,7 +278,7 @@ class TradeMasterPlugin extends AbstractPlugin
 
         // subscribe events
         $this
-            ->subscribe('common:catalog:order:create', [$self, 'order_send'])
+            ->subscribe(['common:catalog:order:create', 'api:catalog:order:create'], [$self, 'order_send'])
             ->subscribe(['cup:catalog:product:edit', 'task:catalog:import'], [$self, 'upload_products']);
     }
 
