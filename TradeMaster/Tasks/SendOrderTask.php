@@ -112,8 +112,8 @@ class SendOrderTask extends AbstractTask
                                 // add task send client mail
                                 $task = new \App\Domain\Tasks\SendMailTask($this->container);
                                 $task->execute([
-                                    'to' => $order->getEmail() ? $order->getEmail() : $this->parameter('smtp_from', ''),
-                                    'bcc' => $order->getEmail() ? $this->parameter('smtp_from', '') : null,
+                                    'to' => $order->getEmail() ? $order->getEmail() : $this->parameter('mail_from', ''),
+                                    'bcc' => $order->getEmail() ? $this->parameter('mail_from', '') : null,
                                     'template' => $this->render($tpl, ['order' => $order]),
                                     'isHtml' => true,
                                 ]);
