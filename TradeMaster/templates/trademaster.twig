@@ -41,7 +41,7 @@
             $btn.on('click', () => {
                 $spin.insertAfter($btn.prop('disabled', true));
 
-                $.post('/api/trademaster/config', {key: key.val()}, (res) => {
+                $.post('/cup/api/tm/config', {key: key.val()}, (res) => {
                     if (res) {
                         for (let field in res) {
                             if (res.hasOwnProperty(field)) {

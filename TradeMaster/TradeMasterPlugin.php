@@ -14,7 +14,7 @@ class TradeMasterPlugin extends AbstractPlugin
     const DESCRIPTION = 'Плагин реализует функционал интеграции с системой торгово-складского учета.';
     const AUTHOR = 'Aleksey Ilyin';
     const AUTHOR_SITE = 'https://u4et.ru/trademaster';
-    const VERSION = '6.0';
+    const VERSION = '6.1';
 
     public function __construct(ContainerInterface $container)
     {
@@ -240,11 +240,11 @@ class TradeMasterPlugin extends AbstractPlugin
             ],
         ]);
 
-        // прокси метод для TM API
+        // TM API Proxy
         $this
             ->map([
                 'methods' => ['get', 'post'],
-                'pattern' => '/api/trademaster/proxy',
+                'pattern' => '/api/tm/proxy',
                 'handler' => \Plugin\TradeMaster\Actions\APIProxy::class,
             ])
             ->setName('api:tm:proxy');
@@ -252,11 +252,11 @@ class TradeMasterPlugin extends AbstractPlugin
         // api for plugin config
         $this
             ->map([
-                'methods' => ['POST'],
-                'pattern' => '/api/trademaster/config',
+                'methods' => ['get', 'post'],
+                'pattern' => '/cup/api/tm/config',
                 'handler' => \Plugin\TradeMaster\Actions\ConfigLoader::class,
             ])
-            ->setName('api:tm:config');
+            ->setName('cup:tm:config');
 
         // send order reserve
         $this
@@ -358,10 +358,10 @@ class TradeMasterPlugin extends AbstractPlugin
                 ]));
             }
 
-            $this->logger->info('TradeMaster: API apikey', ['apikey' => $apikey]);
-            $this->logger->info('TradeMaster: API url', ['path' => $path]);
-            $this->logger->info('TradeMaster: API data', ['data' => $data['params']]);
-            $this->logger->info('TradeMaster: API result', ['output' => $result]);
+            #$this->logger->info('TradeMaster: API apikey', ['apikey' => $apikey]);
+            #$this->logger->info('TradeMaster: API url', ['path' => $path]);
+            #$this->logger->info('TradeMaster: API data', ['data' => $data['params']]);
+            #$this->logger->info('TradeMaster: API result', ['output' => $result]);
 
             return $result ? json_decode($result, true) : [];
         }
