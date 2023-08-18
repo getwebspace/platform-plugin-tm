@@ -276,6 +276,26 @@ class TradeMasterPlugin extends AbstractPlugin
             ])
             ->setName('common:tm:confirm');
 
+        // api external sync
+        $this
+            ->map([
+                'methods' => ['post'],
+                'pattern' => '/api/sync',
+                'handler' => function (Request $req, Response $res) use ($container) {
+                    // add task download products
+                    $task = new \Plugin\TradeMaster\Tasks\CatalogDownloadTask($container);
+                    $task->execute();
+
+                    // run worker
+                    \App\Domain\AbstractTask::worker($task);
+
+                    $res->getBody()->write('Ok');
+
+                    return $res->withHeader('Content-Type', 'text/plain');
+                },
+            ])
+            ->setName('api:tm:sync');
+
         // subscribe events
         $this
             ->subscribe(['common:catalog:order:create', 'api:catalog:order:create'], [$self, 'order_send'])
@@ -312,6 +332,9 @@ class TradeMasterPlugin extends AbstractPlugin
             // add task upload products
             $task = new \Plugin\TradeMaster\Tasks\CatalogUploadTask($this->container);
             $task->execute(['only_updated' => true]);
+
+            // run worker
+            \App\Domain\AbstractTask::worker($task);
         }
     }
 
