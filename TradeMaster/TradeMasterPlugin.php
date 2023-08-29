@@ -14,7 +14,7 @@ class TradeMasterPlugin extends AbstractPlugin
     const DESCRIPTION = 'Плагин реализует функционал интеграции с системой торгово-складского учета.';
     const AUTHOR = 'Aleksey Ilyin';
     const AUTHOR_SITE = 'https://u4et.ru/trademaster';
-    const VERSION = '6.2';
+    const VERSION = '6.3';
 
     public function __construct(ContainerInterface $container)
     {
@@ -280,7 +280,7 @@ class TradeMasterPlugin extends AbstractPlugin
         $this
             ->map([
                 'methods' => ['post'],
-                'pattern' => '/api/sync',
+                'pattern' => '/api/tm/sync',
                 'handler' => function (Request $req, Response $res) use ($container) {
                     // add task download products
                     $task = new \Plugin\TradeMaster\Tasks\CatalogDownloadTask($container);
@@ -299,7 +299,8 @@ class TradeMasterPlugin extends AbstractPlugin
         // subscribe events
         $this
             ->subscribe(['common:catalog:order:create', 'api:catalog:order:create'], [$self, 'order_send'])
-            ->subscribe(['cup:catalog:product:edit', 'task:catalog:import'], [$self, 'upload_products']);
+            ->subscribe(['cup:catalog:product:edit', 'task:catalog:import'], [$self, 'upload_products'])
+            ->subscribe('tm:order:oplata', [$self, 'order_oplata']);
     }
 
     public final function order_send($order)
@@ -335,6 +336,24 @@ class TradeMasterPlugin extends AbstractPlugin
 
             // run worker
             \App\Domain\AbstractTask::worker($task);
+        }
+    }
+
+    public final function order_oplata($order)
+    {
+        if (
+            $this->parameter('TradeMasterPlugin_key', '') !== '' &&
+            $order
+        ) {
+            $this->api([
+                'endpoint' => 'order/oplata',
+                'params' => [
+                    'nomerZakaza' => $order->getExternalId(),
+                    'userID' => $this->parameter('TradeMasterPlugin_user'),
+                    'checkoutCard' => $this->parameter('TradeMasterPlugin_checkout'),
+                    'kontragent' => $this->parameter('TradeMasterPlugin_contractor'),
+                ],
+            ]);
         }
     }
 
