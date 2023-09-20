@@ -34,7 +34,7 @@ class TradeMasterPluginTwigExt extends AbstractExtension
         ]);
     }
 
-    public function tm_order_external(string $id, ?User $user): ?Order
+    public function tm_order_external(string $id, ?User $user = null): ?Order
     {
         $catalogOrderService = $this->container->get(CatalogOrderService::class);
 

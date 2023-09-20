@@ -26,7 +26,7 @@ class CartReserve extends CatalogAction
         $data = [
             'user' => $this->request->getAttribute('user', null),
 
-            'delivery' => $this->getParam('delivery'),
+            'delivery' => $this->getParam('delivery', []),
             'phone' => $this->getParam('phone'),
             'email' => $this->getParam('email'),
             'comment' => $this->getParam('comment', ''),
@@ -44,6 +44,14 @@ class CartReserve extends CatalogAction
         ];
 
         if ($this->isRecaptchaChecked()) {
+            // адрес в несколько строк из корзины
+            if (is_array($data['delivery']['address'])) {
+                if ($this->parameter('catalog_order_address', 'off') === 'on') {
+                    ksort($data['delivery']['address']);
+                }
+                $data['delivery']['address'] = implode(', ', $data['delivery']['address']);
+            }
+
             // выбор куда отправлять заказ
             switch (true) {
                 case in_array($data['type'], ['rezervTel', 'reserve'], true):
@@ -69,8 +77,9 @@ class CartReserve extends CatalogAction
             $products = [];
 
             // список продуктов
-            foreach ($data['products'] as $uuid => $count) {
+            foreach ($data['products'] as $uuid => $opts) {
                 try {
+                    $count = (float) ($opts['count'] ?? 0);
                     $product = $this->catalogProductService->read([
                         'uuid' => $uuid,
                         'export' => 'trademaster',
@@ -148,7 +157,6 @@ class CartReserve extends CatalogAction
                             'external_id' => $result['nomerZakaza'],
                             'export' => 'trademaster',
                         ]));
-                        $this->catalogOrderProductService->proccess($order, $data['products']);
 
                         // notify to admin and user
                         if ($this->parameter('notification_is_enabled', 'yes') === 'yes') {
@@ -177,8 +185,7 @@ class CartReserve extends CatalogAction
                             $task->execute([
                                 'to' => $order->getEmail() ?: $this->parameter('mail_from', ''),
                                 'bcc' => $order->getEmail() ? $this->parameter('mail_from', '') : null,
-                                'template' => $tpl,
-                                'data' => ['order' => $order->getUuid()],
+                                'template' => $this->render($tpl, ['order' => $order]),
                                 'isHtml' => true,
                             ]);
 
