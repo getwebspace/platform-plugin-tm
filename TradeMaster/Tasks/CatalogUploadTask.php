@@ -94,7 +94,6 @@ class CatalogUploadTask extends AbstractTask
                                 <opisanie>' . $product->getDescription() . '</opisanie>
                                 <opisanieDop>' . $product->getExtra() . '</opisanieDop>
                                 <artikul>' . $product->getVendorCode() . '</artikul>
-                                <edIzmer>' . $product->getUnit() . '</edIzmer>
                                 <strihKod>' . $product->getBarCode() . '</strihKod>
                                 <poryadok>' . $product->getOrder() . '</poryadok>
                                 <foto>' . $images . '</foto>
@@ -108,8 +107,7 @@ class CatalogUploadTask extends AbstractTask
                                 <ind3>' . $product->getField3() . '</ind3>
                                 <ind4>' . $product->getField4() . '</ind4>
                                 <ind5>' . $product->getField5() . '</ind5>
-                                <tags>' . $product->getTags() . '</tags>
-                                <ves>' . $product->getVolume() . '</ves>
+                                <ves>' . $product->getWeight() . '</ves>
                                 <proizv>' . $product->getManufacturer() . '</proizv>
                                 <strana>' . $product->getCountry() . '</strana>
                             </ProductAttributeValue>

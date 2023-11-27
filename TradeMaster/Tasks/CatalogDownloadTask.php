@@ -2,13 +2,16 @@
 
 namespace Plugin\TradeMaster\Tasks;
 
-use App\Domain\AbstractService;
+use App\Domain\AbstractException;
 use App\Domain\AbstractTask;
+use App\Domain\Entities\Catalog\Category;
+use App\Domain\Service\Catalog\AttributeService;
 use App\Domain\Service\Catalog\CategoryService;
 use App\Domain\Service\Catalog\CategoryService as CatalogCategoryService;
 use App\Domain\Service\Catalog\Exception\AddressAlreadyExistsException;
 use App\Domain\Service\Catalog\Exception\CategoryNotFoundException;
 use App\Domain\Service\Catalog\Exception\MissingTitleValueException;
+use App\Domain\Service\Catalog\Exception\ProductNotFoundException;
 use App\Domain\Service\Catalog\Exception\TitleAlreadyExistsException;
 use App\Domain\Service\Catalog\ProductService;
 use App\Domain\Service\Catalog\ProductService as CatalogProductService;
@@ -45,14 +48,14 @@ class CatalogDownloadTask extends AbstractTask
     protected ProductService $productService;
 
     /**
+     * @var AttributeService
+     */
+    protected AttributeService $attributeService;
+
+    /**
      * @var array
      */
     private array $downloadImages = [];
-
-    protected static function map(int $x, int $in_min, int $in_max, int $out_min, int $out_max): float
-    {
-        return ($x - $in_min) * ($out_max - $out_min) / ($in_max - $in_min) + $out_min;
-    }
 
     /**
      * @param array $args
@@ -64,29 +67,29 @@ class CatalogDownloadTask extends AbstractTask
         $this->trademaster = $this->container->get('TradeMasterPlugin');
         $this->categoryService = $this->container->get(CatalogCategoryService::class);
         $this->productService = $this->container->get(CatalogProductService::class);
+        $this->attributeService = $this->container->get(AttributeService::class);
 
         try {
-            $categories = $this->categoryService->read(['export' => 'trademaster']);
-            $products = $this->productService->read(['export' => 'trademaster']);
-
             $this->setProgress(1);
-            $this->category($categories);
+            $attributes = $this->generate();
 
-            $this->setProgress(20);
-            $this->product($categories, $products);
+            $this->setProgress(25);
+            $categories = $this->category($attributes);
 
-            $this->setProgress(90);
-            $this->remove($categories, $products);
+            $this->setProgress(50);
+            $this->product($attributes, $categories);
 
             $this->setProgress(95);
 
-            if ($this->downloadImages) {
-                // download images
-                $task = new \Plugin\TradeMaster\Tasks\DownloadImageTask($this->container);
-                $task->execute(['list' => $this->downloadImages]);
+            if ($this->parameter('file_is_enabled', 'no') === 'yes') {
+                if ($this->downloadImages) {
+                    // download images
+                    $task = new \Plugin\TradeMaster\Tasks\DownloadImageTask($this->container);
+                    $task->execute(['list' => $this->downloadImages]);
 
-                // run worker
-                \App\Domain\AbstractTask::worker($task);
+                    // run worker
+                    \App\Domain\AbstractTask::worker($task);
+                }
             }
 
             if ($this->parameter('TradeMasterPlugin_search', 'off') === 'on') {
@@ -108,36 +111,68 @@ class CatalogDownloadTask extends AbstractTask
         return $this->setStatusDone();
     }
 
-    protected function category(Collection &$categories): void
+    protected function generate(): array
     {
-        $this->logger->info('Task: TradeMaster get catalog item');
+        $this->logger->info('Task: TradeMaster check fields attributes');
 
-        // saved parameters of view for category and products
-        $template = [
-            'category' => $this->parameter('catalog_category_template', 'catalog.category.twig'),
-            'product' => $this->parameter('catalog_product_template', 'catalog.product.twig'),
-        ];
-        $pagination = $this->parameter('catalog_category_pagination', 10);
+        $attributes = [];
 
-        $list = $this->trademaster->api([
-            'endpoint' => 'catalog/list',
-            'params' => [
-                'link' => $this->parameter('TradeMasterPlugin_category_link', ''),
-            ],
-        ]);
+        for ($i = 1; $i <= 5; $i++) {
+            try {
+                if (($attr = $this->attributeService->read(['address' => "field{$i}"])) !== null) {
+                    $attributes[$i] = $attr;
+                    $this->logger->info("Task: TradeMaster field{$i} exist");
+                }
+            } catch (AbstractException $e) {
+                $this->logger->info("Task: TradeMaster create field{$i}");
 
-        foreach ($list as $index => $item) {
+                $attributes[$i] = $this->attributeService->create([
+                    'title' => "Индивидуальное поле {$i}",
+                    'address' => "field{$i}",
+                    'type' => \App\Domain\Types\Catalog\AttributeTypeType::TYPE_STRING,
+                ]);
+            }
+        }
+
+        return $attributes;
+    }
+
+    protected function category(array $attributes): Collection
+    {
+        $this->logger->info('Task: TradeMaster get catalog items');
+
+        $list = collect(
+            $this->trademaster->api([
+                'endpoint' => 'catalog/list',
+                'params' => [
+                    'link' => $this->parameter('TradeMasterPlugin_category_link', ''),
+                ],
+            ])
+        );
+
+        if ($list->count()) {
+            $this->categoryService->createQueryBuilder('c')
+                ->update()
+                ->where('c.export = :export')
+                ->setParameter('export', 'trademaster')
+                ->set('c.status', ':status')
+                ->setParameter('status', \App\Domain\Types\Catalog\CategoryStatusType::STATUS_DELETE)
+                ->getQuery()
+                ->execute();
+        }
+
+        return $this->category_process($list, $attributes);
+    }
+
+    private function category_process(Collection $list, array $attributes, int $idParent = 0, Category $parent = null): Collection
+    {
+        $output = collect();
+
+        foreach ($list->where('idParent', $idParent) as $item) {
             $data = [
-                'status' => \App\Domain\Types\Catalog\CategoryStatusType::STATUS_WORK,
-                'external_id' => $item['idZvena'],
-                'parent' => \Ramsey\Uuid\Uuid::NIL,
+                'parent' => $parent,
                 'title' => $item['nameZvena'],
-                'order' => $item['poryadok'],
                 'description' => urldecode($item['opisanie']),
-                'field1' => $item['ind1'],
-                'field2' => $item['ind2'],
-                'field3' => $item['ind3'],
-                'template' => $template,
                 'sort' => [
                     'by' => $this->parameter('catalog_sort_by', 'title'),
                     'direction' => $this->parameter('catalog_sort_direction', 'ASC'),
@@ -146,109 +181,62 @@ class CatalogDownloadTask extends AbstractTask
                     'title' => $item['nameZvena'],
                     'description' => strip_tags(urldecode($item['opisanie'])),
                 ],
-                'pagination' => $pagination,
+                'pagination' => +$this->parameter('catalog_category_pagination', 10),
+                'template' => [
+                    'category' => $this->parameter('catalog_category_template', 'catalog.category.twig'),
+                    'product' => $this->parameter('catalog_product_template', 'catalog.product.twig'),
+                ],
+                'attributes' => $attributes,
+                'order' => $item['poryadok'],
+                'external_id' => $item['idZvena'],
                 'export' => 'trademaster',
+                'system' => json_encode(
+                    ['ind1' => $item['ind1'], 'ind2' => $item['ind2'], 'ind3' => $item['ind3']],
+                    JSON_UNESCAPED_UNICODE
+                ),
+                'status' => \App\Domain\Types\Catalog\CategoryStatusType::STATUS_WORK,
             ];
 
-            /**
-             * @var \App\Domain\Entities\Catalog\Category $category
-             */
-            $category = $categories->firstWhere('external_id', $item['idZvena']);
-
             try {
-                switch (true) {
-                    case !empty($category):
-                        $this->categoryService->update($category, $data);
+                try {
+                    $category = $this->categoryService->read(['external_id' => $item['idZvena']]);
 
-                        break;
-
-                    default:
-                        $categories[] = $category = $this->categoryService->create($data);
-
-                }
-            } catch (MissingTitleValueException $e) {
-                $this->logger->warning('TradeMaster: category title wrong value', $data);
-            } catch (TitleAlreadyExistsException $e) {
-                $this->logger->warning('TradeMaster: category title exist', $data);
-
-                $category = $categories->firstWhere('title', $data['title']);
-
-                if (!empty($category)) {
-                    try {
-                        $this->categoryService->update($category, $data);
-                        $this->logger->warning('TradeMaster: category updated', $data);
-                    } catch (TitleAlreadyExistsException $e) {
-                        $this->logger->warning('TradeMaster: category ignored', $data);
+                    if ($category) {
+                        $category = $this->categoryService->update($category, $data);
                     }
+                } catch (CategoryNotFoundException $e) {
+                    $category = $this->categoryService->create($data);
                 }
-            } catch (AddressAlreadyExistsException $e) {
-                $this->logger->warning('TradeMaster: category address exist', $data);
-            }
-
-            if (!empty($category)) {
-                $category->buf = $item['idParent'];
 
                 // add category photos
-                if ($item['foto'] && $this->parameter('file_is_enabled', 'no') === 'yes') {
+                if ($item['foto']) {
                     $this->downloadImages[] = [
                         'photo' => $item['foto'],
                         'type' => 'category',
                         'uuid' => $category->getUuid()->toString(),
                     ];
                 }
-            }
-        }
 
-        // find parent category
-        foreach ($categories as $category) {
-            if (+$category->buf) {
-                if (($parent = $categories->firstWhere('external_id', $category->buf)) !== null) {
-                    /** @var \App\Domain\Entities\Catalog\Category $parent */
-                    $this->categoryService->update($category, ['parent' => $parent->getUuid()]);
-                } else {
-                    $this->categoryService->update($category, ['status' => \App\Domain\Types\Catalog\CategoryStatusType::STATUS_DELETE]);
-                    $this->logger->warning('TradeMaster: parent category not found, delete', ['parent' => $category->buf]);
-                }
-            }
-        }
-
-        // process addresses
-        if ($this->parameter('common_auto_generate_address', 'no') === 'yes') {
-            $this->logger->info('TradeMaster: generate addresses');
-            $this->categoryFixAddress($this->categoryService, $categories);
-            $this->logger->info('TradeMaster: generate addresses (done)');
-        }
-    }
-
-    /**
-     * @param CategoryService|ProductService                                                  $service
-     * @param Collection                                                                      $list
-     * @param \App\Domain\Entities\Catalog\Category|\App\Domain\Entities\Catalog\Product|null $parent
-     */
-    private function categoryFixAddress($service, Collection $list, $parent = null)
-    {
-        /** @var \App\Domain\Entities\Catalog\Category|null $category */
-        foreach ($list->where('parent', is_null($parent) ? \Ramsey\Uuid\Uuid::NIL : $parent->getUuid()) as $category) {
-            try {
-                $address = [];
-
-                if ($parent) {
-                    $address[] = $parent->getAddress();
-                }
-
-                $address[] = $category->setAddress(str_replace('/', '-', $category->getTitle()))->getAddress();
-                $service->update($category, ['address' => implode('/', $address)]);
+                // save in list
+                $output[] = $category;
+                $output = $output->merge($this->category_process($list, $attributes, +$item['idZvena'], $category));
+            } catch (MissingTitleValueException $e) {
+                $this->logger->warning('TradeMaster: category title wrong value', $data);
+            } catch (TitleAlreadyExistsException $e) {
+                $this->logger->warning('TradeMaster: category title exist', $data);
             } catch (AddressAlreadyExistsException $e) {
-                $this->logger->warning('TradeMaster: error when update category address', ['uuid' => $category->getUuid()->toString()]);
+                $this->logger->warning('TradeMaster: category address exist', $data);
             }
-
-            $this->categoryFixAddress($service, $list, $category);
         }
+
+        return $output;
     }
 
-    protected function product(Collection &$categories, Collection &$products): void
+    protected function product(array $attributes, Collection $categories): Collection
     {
         $this->logger->info('Task: TradeMaster get product item');
+
+        $products = collect();
 
         $count = $this->trademaster->api([
             'endpoint' => 'item/count',
@@ -258,6 +246,15 @@ class CatalogDownloadTask extends AbstractTask
         ]);
 
         if ($count && $count['count']) {
+            $this->productService->createQueryBuilder('c')
+                ->update()
+                ->where('c.export = :export')
+                ->setParameter('export', 'trademaster')
+                ->set('c.status', ':status')
+                ->setParameter('status', \App\Domain\Types\Catalog\ProductStatusType::STATUS_DELETE)
+                ->getQuery()
+                ->execute();
+
             $count = (int) $count['count'];
             $i = 0;
             $step = 100;
@@ -265,6 +262,8 @@ class CatalogDownloadTask extends AbstractTask
 
             // fetch data
             while ($go) {
+                sleep(3);
+
                 $list = $this->trademaster->api([
                     'endpoint' => 'item/list',
                     'params' => [
@@ -275,136 +274,92 @@ class CatalogDownloadTask extends AbstractTask
                     ],
                 ]);
 
-                // полученные данные проверяем и записываем в модели товара
-                foreach ($list as $index => $item) {
-                    $data = [
-                        'status' => \App\Domain\Types\Catalog\ProductStatusType::STATUS_WORK,
-                        'external_id' => $item['idTovar'],
-                        'category' => \Ramsey\Uuid\Uuid::NIL,
-                        'title' => trim($item['name']),
-                        'order' => $item['poryadok'],
-                        'description' => trim(urldecode($item['opisanie'])),
-                        'extra' => trim(urldecode($item['opisanieDop'])),
-                        'field1' => $item['ind1'],
-                        'field2' => $item['ind2'],
-                        'field3' => $item['ind3'],
-                        'field4' => $item['ind4'],
-                        'field5' => $item['ind5'],
-                        'vendorcode' => $item['artikul'],
-                        'barcode' => $item['strihKod'],
-                        'priceFirst' => $item['sebestomost'],
-                        'price' => $item['price'],
-                        'priceWholesale' => $item['opt_price'],
-                        'unit' => rtrim($item['edIzmer'], '.'),
-                        'volume' => $item['ves'],
-                        'country' => $item['strana'],
-                        'manufacturer' => $item['proizv'],
-                        'tags' => $item['tags'],
-                        'date' => new \DateTime(trim($item['changeDate'])),
-                        'meta' => [
-                            'title' => $item['name'],
-                            'description' => strip_tags(urldecode($item['opisanie'])),
-                        ],
-                        'stock' => $item['kolvo'],
-                        'export' => 'trademaster',
-                    ];
-
-                    // find parent category
-                    if (($category = $categories->firstWhere('external_id', $item['vStrukture'])) !== null) {
-                        /** @var \App\Domain\Entities\Catalog\Category $category */
-                        $data['category'] = $category->getUuid()->toString();
-                    }
-
-                    try {
-                        /** @var \App\Domain\Entities\Catalog\Product $product */
-                        $product = $products->firstWhere('external_id', $item['idTovar']);
-                        switch (true) {
-                            case $product:
-                                $this->productService->update($product, $data);
-
-                                break;
-
-                            default:
-                                $products[] = $product = $this->productService->create($data);
-                        }
-                    } catch (MissingTitleValueException $e) {
-                        $this->logger->warning('TradeMaster: product title wrong value', $data);
-                    } catch (TitleAlreadyExistsException $e) {
-                        $this->logger->warning('TradeMaster: product title exist', $data);
-
-                        $product = $products->firstWhere('title', $data['title']);
-
-                        if (!empty($product)) {
-                            try {
-                                $this->productService->update($product, $data);
-                                $this->logger->warning('TradeMaster: product updated', $data);
-                            } catch (TitleAlreadyExistsException $e) {
-                                $this->logger->warning('TradeMaster: product ignored', $data);
-                            }
-                        }
-                    } catch (AddressAlreadyExistsException $e) {
-                        $this->logger->warning('TradeMaster: product address exist', $data);
-                    }
-
-                    if ($product) {
-                        $product->buf = 1;
-
-                        // process product address
-                        if ($this->parameter('common_auto_generate_address', 'no') === 'yes') {
-                            try {
-                                if (($category = $categories->firstWhere('uuid', $product->getCategory())) !== null) {
-                                    /** @var \App\Domain\Entities\Catalog\Product $product */
-                                    $this->productService->update($product, ['address' => $category->getAddress() . '/' . $product->setAddress(str_replace('/', '-', $product->getTitle()))->getAddress()]);
-                                }
-                            } catch (AddressAlreadyExistsException $e) {
-                                $this->logger->warning('TradeMaster: error when update product address', ['uuid' => $product->getUuid()->toString()]);
-                            }
-                        }
-
-                        // add product photos
-                        if ($item['foto'] && $this->parameter('file_is_enabled', 'no') === 'yes') {
-                            $this->downloadImages[] = [
-                                'photo' => $item['foto'],
-                                'type' => 'product',
-                                'uuid' => $product->getUuid()->toString(),
-                            ];
-                        }
-                    }
-
-                    $this->setProgress(static::map($step * $i + $index, 0, $count, 21, 89));
-                }
+                $this->product_process($list, $categories, $attributes);
+                $this->setProgress(static::map($i * $step, 0, $count, 51, 94));
 
                 $i++;
                 $go = $step * $i <= $count;
             }
         }
+
+        return $products;
     }
 
-    protected function remove(Collection &$categories, Collection &$products): void
+    private function product_process(array $list, Collection $categories, array $attributes): void
     {
-        $this->logger->info('Task: TradeMaster remove old categories and products');
+        foreach ($list as $item) {
+            if (($category = $categories->firstWhere('external_id', $item['vStrukture'])) !== null) {
+                $data = [
+                    'title' => trim($item['name']),
+                    'description' => trim(urldecode($item['opisanie'])),
+                    'extra' => trim(urldecode($item['opisanieDop'])),
+                    'vendorcode' => $item['artikul'],
+                    'barcode' => $item['strihKod'],
+                    'priceFirst' => $item['sebestomost'],
+                    'price' => $item['price'],
+                    'priceWholesale' => $item['opt_price'],
+                    'unit' => rtrim($item['edIzmer'], '.'),
+                    'volume' => $item['ves'],
+                    'country' => $item['strana'],
+                    'manufacturer' => $item['proizv'],
+                    'stock' => $item['kolvo'],
+                    'meta' => [
+                        'title' => $item['name'],
+                        'description' => strip_tags(urldecode($item['opisanie'])),
+                    ],
+                    'category' => $category,
+                    'order' => $item['poryadok'],
+                    'status' => \App\Domain\Types\Catalog\ProductStatusType::STATUS_WORK,
+                    'external_id' => $item['idTovar'],
+                    'attributes' => [],
+                    'export' => 'trademaster',
+                ];
 
-        // удаление моделей категорий которые не получили обновление в процессе синхронизации
-        foreach ($categories->where('buf', null) as $category) {
-            /** @var \App\Domain\Entities\Catalog\Category $category */
-            $childCategoriesUuid = $category->getNested($categories)->pluck('uuid')->all();
+                for ($n = 1; $n <= 5; $n++) {
+                    $data['attributes'][$attributes[$n]->getUuid()->toString()] = $item["ind{$n}"];
+                }
 
-            // удаление вложенных категорий
-            foreach ($categories->whereIn('uuid', $childCategoriesUuid) as $subCategory) {
-                $this->categoryService->update($subCategory, ['status' => \App\Domain\Types\Catalog\CategoryStatusType::STATUS_DELETE]);
+                try {
+                    try {
+                        $product = $this->productService->read(['external_id' => $item['idTovar']]);
+
+                        if ($product) {
+                            $product = $this->productService->update($product, $data);
+                        }
+                    } catch (ProductNotFoundException $e) {
+                        $product = $this->productService->create($data);
+                    }
+
+                    // process address
+                    $this->productService->update($product, [
+                        'address' => $category->getAddress() . '/' . $product->setAddress(str_replace('/', '-', $product->getTitle()))->getAddress()
+                    ]);
+
+                    // add product photos
+                    if ($item['foto']) {
+                        $this->downloadImages[] = [
+                            'photo' => $item['foto'],
+                            'type' => 'product',
+                            'uuid' => $product->getUuid()->toString(),
+                        ];
+                    }
+                } catch (MissingTitleValueException $e) {
+                    $this->logger->warning('TradeMaster: product title wrong value', $data);
+                } catch (AddressAlreadyExistsException $e) {
+                    $this->logger->warning('TradeMaster: product address exist', $data);
+                }
+            } else {
+                $this->logger->warning('TradeMaster: category not found', [
+                    'title' => trim($item['name']),
+                    'vStrukture' => $item['vStrukture'],
+                    'external_id' => $item['idTovar'],
+                ]);
             }
-
-            // удаление продуктов в категории
-            foreach ($products->whereIn('category', $childCategoriesUuid) as $product) {
-                $this->productService->update($product, ['status' => \App\Domain\Types\Catalog\ProductStatusType::STATUS_DELETE]);
-            }
-
-            $this->categoryService->update($category, ['status' => \App\Domain\Types\Catalog\CategoryStatusType::STATUS_DELETE]);
         }
+    }
 
-        // удаление моделей продуктов которые не получили обновление в процессе синхронизации
-        foreach ($products->where('status', \App\Domain\Types\Catalog\CategoryStatusType::STATUS_WORK)->where('buf', null) as $product) {
-            $this->productService->update($product, ['status' => \App\Domain\Types\Catalog\ProductStatusType::STATUS_DELETE]);
-        }
+    protected static function map(int $x, int $in_min, int $in_max, int $out_min, int $out_max): float
+    {
+        return ($x - $in_min) * ($out_max - $out_min) / ($in_max - $in_min) + $out_min;
     }
 }

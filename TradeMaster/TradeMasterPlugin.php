@@ -14,7 +14,7 @@ class TradeMasterPlugin extends AbstractPlugin
     const DESCRIPTION = 'Плагин реализует функционал интеграции с системой торгово-складского учета.';
     const AUTHOR = 'Aleksey Ilyin';
     const AUTHOR_SITE = 'https://u4et.ru/trademaster';
-    const VERSION = '6.4';
+    const VERSION = '7.0.0';
 
     public function __construct(ContainerInterface $container)
     {
@@ -420,6 +420,6 @@ class TradeMasterPlugin extends AbstractPlugin
      */
     public function getFilePath(string $name)
     {
-        return $this->parameter('TradeMasterPlugin_cache_host') . '/tradeMasterImages/' . $this->parameter('TradeMasterPlugin_cache_folder') . '/' . trim(rawurlencode($name));
+        return $this->parameter('TradeMasterPlugin_cache_host') . '/' . $this->parameter('TradeMasterPlugin_cache_folder') . '/' . trim(rawurlencode($name));
     }
 }
