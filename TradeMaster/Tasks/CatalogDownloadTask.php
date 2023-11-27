@@ -171,7 +171,7 @@ class CatalogDownloadTask extends AbstractTask
         foreach ($list->where('idParent', $idParent) as $item) {
             $data = [
                 'parent' => $parent,
-                'title' => $item['nameZvena'],
+                'title' => $this->sanitize(trim($item['nameZvena'])),
                 'description' => urldecode($item['opisanie']),
                 'sort' => [
                     'by' => $this->parameter('catalog_sort_by', 'title'),
@@ -290,7 +290,7 @@ class CatalogDownloadTask extends AbstractTask
         foreach ($list as $item) {
             if (($category = $categories->firstWhere('external_id', $item['vStrukture'])) !== null) {
                 $data = [
-                    'title' => trim($item['name']),
+                    'title' => $this->sanitize(trim($item['name'])),
                     'description' => trim(urldecode($item['opisanie'])),
                     'extra' => trim(urldecode($item['opisanieDop'])),
                     'vendorcode' => $item['artikul'],
@@ -361,5 +361,10 @@ class CatalogDownloadTask extends AbstractTask
     protected static function map(int $x, int $in_min, int $in_max, int $out_min, int $out_max): float
     {
         return ($x - $in_min) * ($out_max - $out_min) / ($in_max - $in_min) + $out_min;
+    }
+
+    protected static function sanitize(string $str): string
+    {
+        return preg_replace('/[^\p{L}\p{N}\s\-\.\':,!?()]+/u', '', $str);
     }
 }
