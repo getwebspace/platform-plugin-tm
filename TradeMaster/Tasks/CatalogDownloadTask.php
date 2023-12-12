@@ -290,7 +290,7 @@ class CatalogDownloadTask extends AbstractTask
         foreach ($list as $item) {
             if (($category = $categories->firstWhere('external_id', $item['vStrukture'])) !== null) {
                 $data = [
-                    'title' => $this->sanitize(trim($item['name'])),
+                    'title' => trim($item['name']),
                     'description' => trim(urldecode($item['opisanie'])),
                     'extra' => trim(urldecode($item['opisanieDop'])),
                     'vendorcode' => $item['artikul'],
