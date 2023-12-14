@@ -79,6 +79,9 @@ class CatalogDownloadTask extends AbstractTask
             $this->setProgress(50);
             $this->product($attributes, $categories);
 
+            $this->setProgress(80);
+            $this->product_related();
+
             $this->setProgress(95);
 
             if ($this->parameter('file_is_enabled', 'no') === 'yes') {
@@ -232,11 +235,9 @@ class CatalogDownloadTask extends AbstractTask
         return $output;
     }
 
-    protected function product(array $attributes, Collection $categories): Collection
+    protected function product(array $attributes, Collection $categories): void
     {
         $this->logger->info('Task: TradeMaster get product item');
-
-        $products = collect();
 
         $count = $this->trademaster->api([
             'endpoint' => 'item/count',
@@ -275,14 +276,12 @@ class CatalogDownloadTask extends AbstractTask
                 ]);
 
                 $this->product_process($list, $categories, $attributes);
-                $this->setProgress(static::map($i * $step, 0, $count, 51, 94));
+                $this->setProgress(static::map($i * $step, 0, $count, 51, 79));
 
                 $i++;
                 $go = $step * $i <= $count;
             }
         }
-
-        return $products;
     }
 
     private function product_process(array $list, Collection $categories, array $attributes): void
@@ -312,6 +311,7 @@ class CatalogDownloadTask extends AbstractTask
                     'status' => \App\Domain\Types\Catalog\ProductStatusType::STATUS_WORK,
                     'external_id' => $item['idTovar'],
                     'attributes' => [],
+                    'relation' => [],
                     'export' => 'trademaster',
                 ];
 
@@ -355,6 +355,57 @@ class CatalogDownloadTask extends AbstractTask
                     'external_id' => $item['idTovar'],
                 ]);
             }
+        }
+    }
+
+    protected function product_related(): void
+    {
+        $i = 0;
+        $step = 100;
+        $go = true;
+
+        // fetch data
+        while ($go) {
+            sleep(3);
+
+            $list = $this->trademaster->api([
+                'endpoint' => 'item/soput',
+                'params' => [
+                    'offset' => $i * $step,
+                    'limit' => $step,
+                ],
+            ]);
+            $count = count($list);
+
+            $this->logger->info("Task: TradeMaster check related {$count}");
+
+            foreach ($list as $item) {
+                try {
+                    $relations = [];
+                    $product = $this->productService->read(['external_id' => $item['idTovar1']]);
+
+                    if ($product->hasRelations()) {
+                        foreach ($product->getRelations() as $relation) {
+                            $relations[$relation->getRelated()->getUuid()->toString()] = $relation->getCount();
+                        }
+                    }
+
+                    $related = $this->productService->read(['external_id' => $item['idTovar2']]);
+                    $relations[$related->getUuid()->toString()] = $item['kolvo'];
+
+                    $this->productService->update($product, [
+                        'relation' => $relations,
+                    ]);
+                } catch (ProductNotFoundException $e) {
+                    $this->logger->info("Task: TradeMaster relation product not fount", [
+                        'product' => $item['idTovar1'],
+                        'related' => $item['idTovar2'],
+                    ]);
+                }
+            }
+
+            $i++;
+            $go = $count >= $step;
         }
     }
 
