@@ -297,8 +297,10 @@ class CatalogDownloadTask extends AbstractTask
                     'priceFirst' => $item['sebestomost'],
                     'price' => $item['price'],
                     'priceWholesale' => $item['opt_price'],
-                    'unit' => rtrim($item['edIzmer'], '.'),
-                    'volume' => $item['ves'],
+                    'dimension' => [
+                        'weight' => $item['ves'],
+                        'weight_class' => rtrim($item['edIzmer'], '.'),
+                    ],
                     'country' => $item['strana'],
                     'manufacturer' => $item['proizv'],
                     'stock' => $item['kolvo'],
@@ -397,7 +399,7 @@ class CatalogDownloadTask extends AbstractTask
                         'relation' => $relations,
                     ]);
                 } catch (ProductNotFoundException $e) {
-                    $this->logger->info("Task: TradeMaster relation product not fount", [
+                    $this->logger->info("Task: TradeMaster relation product not found", [
                         'product' => $item['idTovar1'],
                         'related' => $item['idTovar2'],
                     ]);
