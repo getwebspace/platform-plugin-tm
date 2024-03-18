@@ -85,7 +85,8 @@ class SendOrderTask extends AbstractTask
                         'other2Kontakt' => !empty($args['passport']) ? $args['passport'] : ($user ? $user->getAdditional() : ''),
                         'dateDost' => $order
                             ->getShipping()
-                            ->setTimezone(new DateTimeZone($this->parameter('common_timezone', 'UTC'))),
+                            ->setTimezone(new DateTimeZone($this->parameter('common_timezone', 'UTC')))
+                            ->format('Y-m-d\TH:i:s'),
                         'komment' => $order->getComment(),
                         'tovarJson' => json_encode($products, JSON_UNESCAPED_UNICODE),
                         'idKontakt' => $args['idKontakt'],
