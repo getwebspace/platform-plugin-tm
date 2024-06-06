@@ -5,6 +5,8 @@ namespace Plugin\TradeMaster\Tasks;
 use App\Domain\AbstractException;
 use App\Domain\AbstractTask;
 use App\Domain\Entities\Catalog\Category;
+use App\Domain\Models\CatalogCategory;
+use App\Domain\Models\CatalogProduct;
 use App\Domain\Service\Catalog\AttributeService;
 use App\Domain\Service\Catalog\CategoryService;
 use App\Domain\Service\Catalog\CategoryService as CatalogCategoryService;
@@ -22,7 +24,7 @@ class CatalogDownloadTask extends AbstractTask
 {
     public const TITLE = 'Загрузка каталога ТМ';
 
-    public function execute(array $params = []): \App\Domain\Entities\Task
+    public function execute(array $params = []): \App\Domain\Models\Task
     {
         $default = [
             // nothing
@@ -106,7 +108,12 @@ class CatalogDownloadTask extends AbstractTask
 
             $this->setProgress(100);
         } catch (\Exception $exception) {
-            $this->logger->error($exception->getMessage(), ['n' => get_class($exception), 'file' => $exception->getFile(), 'line' => $exception->getLine(), 'trace' => $exception->getTraceAsString()]);
+            $this->logger->error($exception->getMessage(), [
+                'n' => get_class($exception),
+                'file' => $exception->getFile(),
+                'line' => $exception->getLine(),
+                'trace' => $exception->getTraceAsString(),
+            ]);
 
             return $this->setStatusFail();
         }
@@ -123,17 +130,20 @@ class CatalogDownloadTask extends AbstractTask
         for ($i = 1; $i <= 5; $i++) {
             try {
                 if (($attr = $this->attributeService->read(['address' => "field{$i}"])) !== null) {
-                    $attributes[$i] = $attr;
                     $this->logger->info("Task: TradeMaster field{$i} exist");
+
+                    $attributes[$i] = $attr->uuid;
                 }
             } catch (AbstractException $e) {
                 $this->logger->info("Task: TradeMaster create field{$i}");
 
-                $attributes[$i] = $this->attributeService->create([
+                $attr = $this->attributeService->create([
                     'title' => "Индивидуальное поле {$i}",
                     'address' => "field{$i}",
-                    'type' => \App\Domain\Types\Catalog\AttributeTypeType::TYPE_STRING,
+                    'type' => \App\Domain\Casts\Catalog\Attribute\Type::STRING,
                 ]);
+
+                $attributes[$i] = $attr->uuid;
             }
         }
 
@@ -154,28 +164,24 @@ class CatalogDownloadTask extends AbstractTask
         );
 
         if ($list->count()) {
-            $this->categoryService->createQueryBuilder('c')
-                ->update()
-                ->where('c.export = :export')
-                ->setParameter('export', 'trademaster')
-                ->set('c.status', ':status')
-                ->setParameter('status', \App\Domain\Types\Catalog\CategoryStatusType::STATUS_DELETE)
-                ->getQuery()
-                ->execute();
+            CatalogCategory::query()
+                ->where('export', 'trademaster')
+                ->update(['status' => \App\Domain\Casts\Catalog\Status::DELETE]);
         }
 
         return $this->category_process($list, $attributes);
     }
 
-    private function category_process(Collection $list, array $attributes, int $idParent = 0, Category $parent = null): Collection
+    private function category_process(Collection $list, array $attributes, int $idParent = 0, CatalogCategory $parent = null): Collection
     {
         $output = collect();
 
         foreach ($list->where('idParent', $idParent) as $item) {
             $data = [
-                'parent' => $parent,
                 'title' => trim($item['nameZvena']),
+                'address' => trim($item['nameZvena']),
                 'description' => urldecode($item['opisanie']),
+                'parent_uuid' => $parent?->uuid,
                 'sort' => [
                     'by' => $this->parameter('catalog_sort_by', 'title'),
                     'direction' => $this->parameter('catalog_sort_direction', 'ASC'),
@@ -193,16 +199,20 @@ class CatalogDownloadTask extends AbstractTask
                 'order' => $item['poryadok'],
                 'external_id' => $item['idZvena'],
                 'export' => 'trademaster',
-                'system' => json_encode(
-                    ['ind1' => $item['ind1'], 'ind2' => $item['ind2'], 'ind3' => $item['ind3']],
-                    JSON_UNESCAPED_UNICODE
-                ),
-                'status' => \App\Domain\Types\Catalog\CategoryStatusType::STATUS_WORK,
+                'specifics' => [
+                    'ind1' => $item['ind1'],
+                    'ind2' => $item['ind2'],
+                    'ind3' => $item['ind3'],
+                ],
+                'status' => \App\Domain\Casts\Catalog\Status::WORK,
             ];
 
             try {
                 try {
-                    $category = $this->categoryService->read(['external_id' => $item['idZvena']]);
+                    $category = $this->categoryService->read([
+                        'external_id' => $item['idZvena'],
+                        'export' => 'trademaster',
+                    ]);
 
                     if ($category) {
                         $category = $this->categoryService->update($category, $data);
@@ -216,7 +226,7 @@ class CatalogDownloadTask extends AbstractTask
                     $this->downloadImages[] = [
                         'photo' => $item['foto'],
                         'type' => 'category',
-                        'uuid' => $category->getUuid()->toString(),
+                        'uuid' => $category->uuid,
                     ];
                 }
 
@@ -247,18 +257,13 @@ class CatalogDownloadTask extends AbstractTask
         ]);
 
         if ($count && $count['count']) {
-            $this->productService->createQueryBuilder('c')
-                ->update()
-                ->where('c.export = :export')
-                ->setParameter('export', 'trademaster')
-                ->set('c.status', ':status')
-                ->setParameter('status', \App\Domain\Types\Catalog\ProductStatusType::STATUS_DELETE)
-                ->getQuery()
-                ->execute();
+            CatalogProduct::query()
+                ->where('export', 'trademaster')
+                ->update(['status' => \App\Domain\Casts\Catalog\Status::DELETE]);
 
             $count = (int) $count['count'];
             $i = 0;
-            $step = 100;
+            $step = 250;
             $go = true;
 
             // fetch data
@@ -288,8 +293,10 @@ class CatalogDownloadTask extends AbstractTask
     {
         foreach ($list as $item) {
             if (($category = $categories->firstWhere('external_id', $item['vStrukture'])) !== null) {
+                /** @var CatalogCategory $category */
                 $data = [
                     'title' => trim($item['name']),
+                    'address' => trim($item['name']),
                     'description' => trim(urldecode($item['opisanie'])),
                     'extra' => trim(urldecode($item['opisanieDop'])),
                     'vendorcode' => $item['artikul'],
@@ -308,9 +315,9 @@ class CatalogDownloadTask extends AbstractTask
                         'title' => $item['name'],
                         'description' => strip_tags(urldecode($item['opisanie'])),
                     ],
-                    'category' => $category,
+                    'category_uuid' => $category->uuid,
                     'order' => $item['poryadok'],
-                    'status' => \App\Domain\Types\Catalog\ProductStatusType::STATUS_WORK,
+                    'status' => \App\Domain\Casts\Catalog\Status::WORK,
                     'external_id' => $item['idTovar'],
                     'attributes' => [],
                     'relation' => [],
@@ -318,7 +325,7 @@ class CatalogDownloadTask extends AbstractTask
                 ];
 
                 for ($n = 1; $n <= 5; $n++) {
-                    $data['attributes'][$attributes[$n]->getUuid()->toString()] = $item["ind{$n}"];
+                    $data['attributes'][$attributes[$n]] = $item["ind{$n}"];
                 }
 
                 try {
@@ -334,7 +341,7 @@ class CatalogDownloadTask extends AbstractTask
 
                     // process address
                     $this->productService->update($product, [
-                        'address' => $category->getAddress() . '/' . $product->setAddress(str_replace('/', '-', $product->getTitle()))->getAddress()
+                        'address' => implode('/', array_filter([$product->category->address, $product->title ?? uniqid()], fn ($el) => (bool) $el))
                     ]);
 
                     // add product photos
@@ -342,7 +349,7 @@ class CatalogDownloadTask extends AbstractTask
                         $this->downloadImages[] = [
                             'photo' => $item['foto'],
                             'type' => 'product',
-                            'uuid' => $product->getUuid()->toString(),
+                            'uuid' => $product->uuid,
                         ];
                     }
                 } catch (MissingTitleValueException $e) {
@@ -366,6 +373,8 @@ class CatalogDownloadTask extends AbstractTask
         $step = 100;
         $go = true;
 
+        $sync = [];
+
         // fetch data
         while ($go) {
             sleep(3);
@@ -379,25 +388,20 @@ class CatalogDownloadTask extends AbstractTask
             ]);
             $count = count($list);
 
-            $this->logger->info("Task: TradeMaster check related {$count}");
+            $this->logger->info("Task: TradeMaster check related {$count}", ['offset' => $i * $step, 'limit' => $step]);
 
             foreach ($list as $item) {
                 try {
-                    $relations = [];
                     $product = $this->productService->read(['external_id' => $item['idTovar1']]);
-
-                    if ($product->hasRelations()) {
-                        foreach ($product->getRelations() as $relation) {
-                            $relations[$relation->getRelated()->getUuid()->toString()] = $relation->getCount();
-                        }
-                    }
+                    $buf = [
+                        'product' => $product,
+                        'relations' => isset($sync[$product->uuid]) ? $sync[$product->uuid]['relations'] : [],
+                    ];
 
                     $related = $this->productService->read(['external_id' => $item['idTovar2']]);
-                    $relations[$related->getUuid()->toString()] = $item['kolvo'];
+                    $buf['relations'][$related->uuid] = floatval($item['kolvo']);
 
-                    $this->productService->update($product, [
-                        'relation' => $relations,
-                    ]);
+                    $sync[$product->uuid] = $buf;
                 } catch (ProductNotFoundException $e) {
                     $this->logger->info("Task: TradeMaster relation product not found", [
                         'product' => $item['idTovar1'],
@@ -408,6 +412,15 @@ class CatalogDownloadTask extends AbstractTask
 
             $i++;
             $go = $count >= $step;
+        }
+
+        $this->logger->info("Task: TradeMaster write relations", ['sync' => $sync]);
+
+        // write relations
+        foreach ($sync as $item) {
+            $this->productService->update($item['product'], [
+                'relations' => $item['relations'],
+            ]);
         }
     }
 

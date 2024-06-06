@@ -1,0 +1,37 @@
+<script>
+    if (location.pathname === '/cup/parameters') {
+        // config worker
+        document.addEventListener('DOMContentLoaded', () => {
+            let $btn = $('[name="TradeMasterPlugin[update]"]'),
+                $spin = $('<i class="fas fa-sync fa-spin ml-3"></i>'),
+                key = $('[name="TradeMasterPlugin[key]"]');
+
+            $btn.on('click', () => {
+                $spin.insertAfter($btn.prop('disabled', true));
+
+                $.post('/cup/api/tm/config', {key: key.val()}, (res) => {
+                    if (res) {
+                        for (let field in res) {
+                            if (res.hasOwnProperty(field)) {
+                                let $el = $('[name="TradeMasterPlugin[' + field + ']"]').html('');
+
+                                for (let value in res[field]) {
+                                    if (res[field].hasOwnProperty(value)) {
+                                        $el.append(
+                                            $('<option>').attr('value', value).text(res[field][value])
+                                        );
+                                    }
+                                }
+                            }
+
+                        }
+                        $('[name="TradeMasterPlugin[config]"]').val(JSON.stringify(res));
+                    }
+
+                    $btn.prop('disabled', false);
+                    $spin.detach();
+                })
+            });
+        });
+    }
+</script>

@@ -3,6 +3,7 @@
 namespace Plugin\TradeMaster;
 
 use App\Domain\AbstractPlugin;
+use App\Domain\Models\CatalogOrder;
 use Psr\Container\ContainerInterface;
 use Slim\Psr7\Request;
 use Slim\Psr7\Response;
@@ -14,7 +15,7 @@ class TradeMasterPlugin extends AbstractPlugin
     const DESCRIPTION = 'Плагин реализует функционал интеграции с системой торгово-складского учета.';
     const AUTHOR = 'Aleksey Ilyin';
     const AUTHOR_SITE = 'https://u4et.ru/trademaster';
-    const VERSION = '7.1.2';
+    const VERSION = '8.0.0';
 
     public function __construct(ContainerInterface $container)
     {
@@ -63,9 +64,6 @@ class TradeMasterPlugin extends AbstractPlugin
             'label' => 'Хост кеш файлов',
             'type' => 'text',
             'name' => 'cache_host',
-            'args' => [
-                'value' => 'https://trademaster.pro',
-            ],
         ]);
         $this->addSettingsField([
             'label' => 'Папка на хосте с кеш файлами',
@@ -303,7 +301,7 @@ class TradeMasterPlugin extends AbstractPlugin
             ->subscribe(['plugin:order:payment', 'tm:order:oplata'], [$self, 'order_oplata']);
     }
 
-    public final function order_send($order)
+    public final function order_send(CatalogOrder $order)
     {
         if (
             $this->parameter('TradeMasterPlugin_key', '') !== '' &&
@@ -311,7 +309,7 @@ class TradeMasterPlugin extends AbstractPlugin
         ) {
             $task = new \Plugin\TradeMaster\Tasks\SendOrderTask($this->container);
             $task->execute([
-                'uuid' => $order->getUuid(),
+                'uuid' => $order->uuid,
                 'idKontakt' => ($_REQUEST['idKontakt'] ?? ''),
                 'numberDoc' => ($_REQUEST['numberDoc'] ?? ''),
                 'numberDocStr' => ($_REQUEST['numberDocStr'] ?? ''),
@@ -339,7 +337,7 @@ class TradeMasterPlugin extends AbstractPlugin
         }
     }
 
-    public final function order_oplata($order)
+    public final function order_oplata(CatalogOrder $order)
     {
         if (
             $this->parameter('TradeMasterPlugin_key', '') !== '' &&
@@ -348,7 +346,7 @@ class TradeMasterPlugin extends AbstractPlugin
             $this->api([
                 'endpoint' => 'order/oplata',
                 'params' => [
-                    'nomerZakaza' => $order->getExternalId(),
+                    'nomerZakaza' => $order->external_id,
                     'userID' => $this->parameter('TradeMasterPlugin_user'),
                     'checkoutCard' => $this->parameter('TradeMasterPlugin_checkout'),
                     'kontragent' => $this->parameter('TradeMasterPlugin_contractor'),
@@ -400,10 +398,10 @@ class TradeMasterPlugin extends AbstractPlugin
                 ]));
             }
 
-            #$this->logger->info('TradeMaster: API apikey', ['apikey' => $apikey]);
-            #$this->logger->info('TradeMaster: API url', ['path' => $path]);
-            #$this->logger->info('TradeMaster: API data', ['data' => $data['params']]);
-            #$this->logger->info('TradeMaster: API result', ['output' => $result]);
+//            $this->logger->info('TradeMaster: API apikey', ['apikey' => $apikey]);
+//            $this->logger->info('TradeMaster: API url', ['path' => $path]);
+//            $this->logger->info('TradeMaster: API data', ['data' => $data['params']]);
+//            $this->logger->info('TradeMaster: API result', ['output' => $result]);
 
             return $result ? json_decode($result, true) : [];
         }

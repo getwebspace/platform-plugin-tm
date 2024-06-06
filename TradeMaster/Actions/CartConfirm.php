@@ -27,7 +27,9 @@ class CartConfirm extends AbstractAction
 
             $data['products'] = $tm->api([
                 'endpoint' => 'order/getSchet',
-                'params' => ['nomer' => $data['nomer']],
+                'params' => [
+                    'nomer' => $data['nomer'],
+                ],
             ]);
 
             if ($data['products']) {

@@ -9,7 +9,9 @@ class ConfigLoader extends AbstractAction
 {
     protected function action(): \Slim\Psr7\Response
     {
-        $default = ['key' => ''];
+        $default = [
+            'key' => ''
+        ];
         $data = array_merge($default, ($this->request->getParsedBody() ?? []), ($this->request->getQueryParams() ?? []));
 
         /** @var TradeMasterPlugin $tm */

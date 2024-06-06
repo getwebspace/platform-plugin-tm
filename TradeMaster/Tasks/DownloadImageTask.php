@@ -5,7 +5,6 @@ namespace Plugin\TradeMaster\Tasks;
 use App\Domain\AbstractTask;
 use App\Domain\Service\Catalog\CategoryService;
 use App\Domain\Service\Catalog\ProductService;
-use App\Domain\Service\File\FileRelationService;
 use App\Domain\Service\File\FileService;
 use Plugin\TradeMaster\TradeMasterPlugin;
 
@@ -13,15 +12,11 @@ class DownloadImageTask extends AbstractTask
 {
     public const TITLE = 'Загрузка изображений из ТМ';
 
-    public function execute(array $params = []): \App\Domain\Entities\Task
+    public function execute(array $params = []): \App\Domain\Models\Task
     {
         $default = [
             'list' => [
-                /*[
-                    'photo' => '',
-                    'type' => '',
-                    'uuid' => '',
-                ],*/
+                /*[ 'photo' => '', 'type' => '', 'uuid' => '' ],*/
             ],
         ];
         $params = array_merge($default, $params);
@@ -50,11 +45,6 @@ class DownloadImageTask extends AbstractTask
     protected FileService $fileService;
 
     /**
-     * @var FileRelationService
-     */
-    protected FileRelationService $fileRelationService;
-
-    /**
      * @var array
      */
     private array $convertImageUuids = [];
@@ -65,13 +55,12 @@ class DownloadImageTask extends AbstractTask
         $this->categoryService = $this->container->get(CategoryService::class);
         $this->productService = $this->container->get(ProductService::class);
         $this->fileService = $this->container->get(FileService::class);
-        $this->fileRelationService = $this->container->get(FileRelationService::class);
 
         if ($this->parameter('file_is_enabled', 'no') === 'yes') {
             foreach ($args['list'] as $index => $item) {
                 if ($item['photo']) {
                     /**
-                     * @var \App\Domain\Entities\Catalog\Category|\App\Domain\Entities\Catalog\Product $model
+                     * @var \App\Domain\Models\CatalogCategory|\App\Domain\Models\CatalogProduct $model
                      */
                     switch ($item['type']) {
                         case 'category':
@@ -85,29 +74,30 @@ class DownloadImageTask extends AbstractTask
                     }
 
                     if (!empty($entity)) {
-                        if ($entity->hasFiles()) {
-                            $entity->clearFiles();
-                        }
+                        $sync = [];
 
                         foreach (explode(';', $item['photo']) as $i => $name) {
                             $path = $this->trademaster->getFilePath($name);
 
                             if (($file = $this->fileService->createFromPath($path)) !== null) {
-                                $this->fileRelationService->create([
-                                    'entity' => $entity,
-                                    'file' => $file,
-                                    'order' => $i + 1,
-                                ]);
+                                $sync[$file->uuid] = [
+                                    'order' => count($sync) + 1,
+                                    'comment' => '',
+                                ];
 
-                                if ($file->getInternalPath('full') === $file->getInternalPath('middle')) {
+                                if ($file->internal_path('full') === $file->internal_path('middle')) {
                                     // is image
-                                    if (str_starts_with($file->getType(), 'image/')) {
-                                        $this->convertImageUuids[] = $file->getUuid();
+                                    if (str_starts_with($file->type, 'image/')) {
+                                        $this->convertImageUuids[] = $file->uuid;
                                     }
                                 }
                             } else {
                                 $this->logger->warning('TradeMaster: file not loaded', ['path' => $path]);
                             }
+                        }
+
+                        if ($sync) {
+                            $entity->files()->sync($sync);
                         }
                     } else {
                         $this->logger->warning('TradeMaster: entity not found and file not loaded', [

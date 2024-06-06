@@ -3,7 +3,7 @@
 namespace Plugin\TradeMaster\Tasks;
 
 use App\Domain\AbstractTask;
-use App\Domain\Service\Catalog\ProductService;
+use App\Domain\Service\Catalog\ProductService as CatalogProductService;
 use Plugin\TradeMaster\TradeMasterPlugin;
 use Illuminate\Support\Collection;
 
@@ -11,7 +11,7 @@ class CatalogUploadTask extends AbstractTask
 {
     public const TITLE = 'Выгрузка каталога ТМ';
 
-    public function execute(array $params = []): \App\Domain\Entities\Task
+    public function execute(array $params = []): \App\Domain\Models\Task
     {
         $default = [
             'only_updated' => false,
@@ -27,47 +27,44 @@ class CatalogUploadTask extends AbstractTask
     protected TradeMasterPlugin $trademaster;
 
     /**
-     * @var ProductService
+     * @var CatalogProductService
      */
-    protected ProductService $productService;
+    protected CatalogProductService $productService;
 
     protected function action(array $args = []): void
     {
         $this->trademaster = $this->container->get('TradeMasterPlugin');
-        $this->productService = ProductService::getWithContainer($this->container);
+        $this->productService = $this->container->get(CatalogProductService::class);
 
         $products = $this->productService->read([
             'export' => 'trademaster',
-            'status' => \App\Domain\Types\Catalog\ProductStatusType::STATUS_WORK,
+            'status' => \App\Domain\Casts\Catalog\Status::WORK,
         ]);
 
         // получение списка недавно обновленных товаров
         if ($args['only_updated'] === true) {
-            $buf = collect();
-            $now = (new \DateTime('now'))->modify('-5 minutes');
+            $now = datetime()->modify('-5 minutes');
+            $products = $products->filter(function (\App\Domain\Models\CatalogProduct $product) use ($now) {
+                return $product->date > $now;
+            });
 
-            /** @var \App\Domain\Entities\Catalog\Product $product */
-            foreach ($products as $product) {
-                if ($product->getDate() > $now) {
-                    $buf[] = $product;
-                }
-            }
-
-            $products = $buf;
             $this->logger->info('TradeMaster: upload only updated products', ['count' => $products->count()]);
         }
 
         $step = 100;
         foreach ($products->chunk($step) as $index => $chunk) {
             $this->setProgress($index, $products->count() / $step);
+
+            $xml = $this->getPruductXML($chunk);
             $response = $this->trademaster->api([
                 'method' => 'POST',
                 'endpoint' => 'item/updateTovarSite',
                 'params' => [
-                    'tovarxml' => $this->getPruductXML($chunk),
+                    'tovarxml' => $xml,
                 ],
             ]);
-            $this->logger->info('TradeMaster: upload catalog data', ['response' => $response, 'xml' => $this->getPruductXML($chunk)]);
+
+            $this->logger->info('TradeMaster: upload catalog data', ['response' => $response, 'xml' => $xml]);
         }
 
         $this->setStatusDone();
@@ -77,41 +74,39 @@ class CatalogUploadTask extends AbstractTask
     {
         $output = '<Attributes>';
 
-        $host = rtrim($this->parameter('common_homepage', false), '/');
-
-        /** @var \App\Domain\Entities\Catalog\Product $product */
+        /** @var \App\Domain\Models\CatalogProduct $product */
         foreach ($products as $product) {
             $images = [];
-            foreach ($product->getFiles() as $file) {
-                /** @var \App\Domain\Entities\File $file */
-                $images[] = $host . $file->getPublicPath();
+            foreach ($product->files as $file) {
+                /** @var \App\Domain\Models\File $file */
+                $images[] = $file->filename();
             }
             $images = implode(',', $images);
 
-            $output .= '<ProductAttribute idTovar="' . $product->getExternalId() . '">
-                            <ProductAttributeValue>
-                                <name>' . $product->getTitle() . '</name>
-                                <opisanie>' . $product->getDescription() . '</opisanie>
-                                <opisanieDop>' . $product->getExtra() . '</opisanieDop>
-                                <artikul>' . $product->getVendorCode() . '</artikul>
-                                <strihKod>' . $product->getBarCode() . '</strihKod>
-                                <poryadok>' . $product->getOrder() . '</poryadok>
-                                <foto>' . $images . '</foto>
-                                <link>' . $product->getAddress() . '</link>
-                                <sebestoim>' . $product->getPriceFirst() . '</sebestoim>
-                                <price>' . $product->getPrice() . '</price>
-                                <opt_price>' . $product->getPriceWholesale() . '</opt_price>
-                                <kolvo>' . $product->getStock() . '</kolvo>
-                                <ind1>' . $product->getField1() . '</ind1>
-                                <ind2>' . $product->getField2() . '</ind2>
-                                <ind3>' . $product->getField3() . '</ind3>
-                                <ind4>' . $product->getField4() . '</ind4>
-                                <ind5>' . $product->getField5() . '</ind5>
-                                <ves>' . $product->getWeight() . '</ves>
-                                <proizv>' . $product->getManufacturer() . '</proizv>
-                                <strana>' . $product->getCountry() . '</strana>
-                            </ProductAttributeValue>
-                        </ProductAttribute>';
+            $output .= '<ProductAttribute idTovar="' . $product->external_id . '">';
+            $output .= '<ProductAttributeValue>';
+            $output .= '<name>' . $product->title . '</name>';
+            $output .= '<opisanie>' . $product->description . '</opisanie>';
+            $output .= '<opisanieDop>' . $product->extra . '</opisanieDop>';
+            $output .= '<artikul>' . $product->vendorcode . '</artikul>';
+            $output .= '<strihKod>' . $product->barcode . '</strihKod>';
+            $output .= '<poryadok>' . $product->order . '</poryadok>';
+            $output .= '<foto>' . $images . '</foto>';
+            $output .= '<link>' . $product->address . '</link>';
+            $output .= '<sebestoim>' . $product->priceFirst . '</sebestoim>';
+            $output .= '<price>' . $product->price . '</price>';
+            $output .= '<opt_price>' . $product->priceWholesale . '</opt_price>';
+            $output .= '<kolvo>' . $product->stock . '</kolvo>';
+
+            foreach ($product->attributes()->where('address', 'like', 'field%')->getResults() as $i => $attribute) {
+                $output .= '<ind' . ($i + 1) . '>' . $attribute->value() . '</ind' . ($i + 1) . '>';
+            }
+
+            $output .= '<ves>' . $product->weight() . '</ves>';
+            $output .= '<proizv>' . $product->manufacturer . '</proizv>';
+            $output .= '<strana>' . $product->country . '</strana>';
+            $output .= '</ProductAttributeValue>';
+            $output .= '</ProductAttribute>';
         }
 
         $output .= '</Attributes>';

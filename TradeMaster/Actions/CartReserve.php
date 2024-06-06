@@ -85,20 +85,20 @@ class CartReserve extends CatalogAction
                         'export' => 'trademaster',
                     ]);
 
-                    $price = $product->getPrice();
+                    $price = $product->price;
 
                     if ($this->parameter('TradeMasterPlugin_price_select', 'off') === 'on' && $data['user']) {
-                        $price = $product->getPriceWholesale();
+                        $price = $product->priceWholesale;
                     }
 
                     $products[] = [
-                        'id' => $product->getExternalId(),
-                        'name' => $product->getTitle(),
+                        'id' => $product->external_id,
+                        'name' => $product->title,
                         'quantity' => $count,
                         'price' => (float) $price * $count,
                     ];
                 } catch (ProductNotFoundException $e) {
-                    continue;
+                    // nothing
                 }
             }
 
@@ -158,33 +158,13 @@ class CartReserve extends CatalogAction
                             'export' => 'trademaster',
                         ]));
 
-                        // notify to admin and user
-                        if ($this->parameter('notification_is_enabled', 'yes') === 'yes') {
-                            $this->notificationService->create([
-                                'title' => __('Добавлен заказ') . ': ' . $order->getSerial(),
-                                'params' => [
-                                    'order_uuid' => $order->getUuid(),
-                                ],
-                            ]);
-
-                            if ($data['user']) {
-                                $this->notificationService->create([
-                                    'user_uuid' => $data['user']->getUuid(),
-                                    'title' => __('Добавлен заказ') . ': ' . $order->getSerial(),
-                                    'params' => [
-                                        'order_uuid' => $order->getUuid(),
-                                    ],
-                                ]);
-                            }
-                        }
-
                         // письмо клиенту и админу
                         if (($tpl = $this->parameter('TradeMasterPlugin_mail_client_template', '')) !== '') {
                             // add task send client mail
                             $task = new \App\Domain\Tasks\SendMailTask($this->container);
                             $task->execute([
-                                'to' => $order->getEmail() ?: $this->parameter('mail_from', ''),
-                                'bcc' => $order->getEmail() ? $this->parameter('mail_from', '') : null,
+                                'to' => $order->email ?: $this->parameter('mail_from', ''),
+                                'bcc' => $order->email ? $this->parameter('mail_from', '') : null,
                                 'template' => $this->render($tpl, ['order' => $order]),
                                 'isHtml' => true,
                             ]);
@@ -196,10 +176,10 @@ class CartReserve extends CatalogAction
                         if (
                             (empty($_SERVER['HTTP_X_REQUESTED_WITH']) || $_SERVER['HTTP_X_REQUESTED_WITH'] !== 'XMLHttpRequest') && !empty($_SERVER['HTTP_REFERER'])
                         ) {
-                            $this->response = $this->response->withHeader('Location', '/cart/done/' . $order->getUuid())->withStatus(301);
+                            $this->response = $this->response->withHeader('Location', '/cart/done/' . $order->uuid)->withStatus(301);
                         }
 
-                        return $this->respondWithJson(['redirect' => '/cart/done/' . $order->getUuid()]);
+                        return $this->respondWithJson(['redirect' => '/cart/done/' . $order->uuid]);
                     }
                 }
 

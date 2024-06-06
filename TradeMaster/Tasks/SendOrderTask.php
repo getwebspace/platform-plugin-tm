@@ -3,6 +3,7 @@
 namespace Plugin\TradeMaster\Tasks;
 
 use App\Domain\AbstractTask;
+use App\Domain\Entities\Catalog\Order;
 use App\Domain\Service\Catalog\OrderService as CatalogOrderService;
 use App\Domain\Service\Catalog\Exception\OrderNotFoundException;
 use App\Domain\Service\User\Exception\UserNotFoundException;
@@ -14,7 +15,7 @@ class SendOrderTask extends AbstractTask
 {
     public const TITLE = 'Отправка заказа в ТМ';
 
-    public function execute(array $params = []): \App\Domain\Entities\Task
+    public function execute(array $params = []): \App\Domain\Models\Task
     {
         $default = [
             'uuid' => '',
@@ -36,6 +37,7 @@ class SendOrderTask extends AbstractTask
         $catalogOrderService = $this->container->get(CatalogOrderService::class);
 
         try {
+            /** @var Order $order */
             $order = $catalogOrderService->read(['uuid' => $args['uuid']]);
 
             if ($order) {
@@ -85,7 +87,6 @@ class SendOrderTask extends AbstractTask
                         'other2Kontakt' => !empty($args['passport']) ? $args['passport'] : ($user ? $user->getAdditional() : ''),
                         'dateDost' => $order
                             ->getShipping()
-                            ->setTimezone(new DateTimeZone($this->parameter('common_timezone', 'UTC')))
                             ->format('Y-m-d\TH:i:s'),
                         'komment' => $order->getComment(),
                         'tovarJson' => json_encode($products, JSON_UNESCAPED_UNICODE),
