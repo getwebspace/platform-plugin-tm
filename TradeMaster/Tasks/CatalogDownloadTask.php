@@ -73,7 +73,7 @@ class CatalogDownloadTask extends AbstractTask
 
         try {
             $this->setProgress(1);
-            $attributes = $this->generate();
+            $attributes = $this->basic_attributes();
 
             $this->setProgress(25);
             $categories = $this->category($attributes);
@@ -121,33 +121,41 @@ class CatalogDownloadTask extends AbstractTask
         return $this->setStatusDone();
     }
 
-    protected function generate(): array
+    protected function basic_attributes(): array
     {
         $this->logger->info('Task: TradeMaster check fields attributes');
 
         $attributes = [];
 
-        for ($i = 1; $i <= 5; $i++) {
-            try {
-                if (($attr = $this->attributeService->read(['address' => "field{$i}"])) !== null) {
-                    $this->logger->info("Task: TradeMaster field{$i} exist");
-
-                    $attributes[$i] = $attr->uuid;
-                }
-            } catch (AbstractException $e) {
-                $this->logger->info("Task: TradeMaster create field{$i}");
-
-                $attr = $this->attributeService->create([
-                    'title' => "Индивидуальное поле {$i}",
-                    'address' => "field{$i}",
-                    'type' => \App\Domain\Casts\Catalog\Attribute\Type::STRING,
-                ]);
-
-                $attributes[$i] = $attr->uuid;
-            }
+        for ($i = 1; $i <= 4; $i++) {
+            $attributes[$i] = $this->retrieve_attribute("field{$i}", "TM: Ind{$i}");
         }
 
         return $attributes;
+    }
+
+    protected function retrieve_attribute($search, $group = '', $type = \App\Domain\Casts\Catalog\Attribute\Type::STRING)
+    {
+        try {
+            if (($attr = $this->attributeService->read(['address' => $search])) !== null) {
+                return $attr->uuid;
+            }
+        } catch (AbstractException $e) {
+            try {
+                if (($attr = $this->attributeService->read(['title' => $search])) !== null) {
+                    return $attr->uuid;
+                }
+            } catch (AbstractException $e) {
+                $attr = $this->attributeService->create([
+                    'title' => $search,
+                    'address' => $search,
+                    'group' => $group,
+                    'type' => $type,
+                ]);
+
+                return $attr->uuid;
+            }
+        }
     }
 
     protected function category(array $attributes): Collection
@@ -325,7 +333,18 @@ class CatalogDownloadTask extends AbstractTask
                 ];
 
                 for ($n = 1; $n <= 5; $n++) {
-                    $data['attributes'][$attributes[$n]] = $item["ind{$n}"];
+                    if ($n < 5) {
+                        $data['attributes'][$attributes[$n]] = $item["ind{$n}"];
+                    } else {
+                        foreach (explode(',', $item["ind{$n}"]) as $name) {
+                            $name = mb_convert_case(trim($name), MB_CASE_TITLE, "UTF-8");
+
+                            if ($name) {
+                                $uuid = $this->retrieve_attribute($name, "TM: Ind{$n}", \App\Domain\Casts\Catalog\Attribute\Type::BOOLEAN);
+                                $data['attributes'][$uuid] = 'yes';
+                            }
+                        }
+                    }
                 }
 
                 try {

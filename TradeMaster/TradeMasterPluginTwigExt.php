@@ -20,6 +20,8 @@ class TradeMasterPluginTwigExt extends AbstractExtension
         return [
             new \Twig\TwigFunction('tm_api', [$this, 'tm_api']),
             new \Twig\TwigFunction('tm_order_external', [$this, 'tm_order_external']),
+            new \Twig\TwigFunction('tm_ingrids', [$this, 'tm_ingrids']),
+            new \Twig\TwigFunction('tm_filter', [$this, 'tm_filter']),
         ];
     }
 
@@ -46,5 +48,30 @@ class TradeMasterPluginTwigExt extends AbstractExtension
         } catch (OrderNotFoundException $e) {
             return null;
         }
+    }
+
+    public function tm_ingrids($list)
+    {
+        return $list
+            ->map(function ($el) {
+                return $el->attributes->where('group', 'TM: Ind5');
+            })
+            ->flatten()
+            ->unique('address')
+            ->sortBy('title')
+            ->pluck('address', 'title');
+    }
+
+    public function tm_filter($list, $field = '', $value = '')
+    {
+        return $list
+            ->filter(function ($item) use ($field, $value) {
+                $title = mb_strtolower(data_get($item, $field));
+
+                return str_contains($title, mb_strtolower($value));
+            })
+            ->sortBy('category.order')
+            ->groupBy('address')
+        ;
     }
 }
