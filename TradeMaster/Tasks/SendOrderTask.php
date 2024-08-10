@@ -41,33 +41,27 @@ class SendOrderTask extends AbstractTask
             $order = $catalogOrderService->read(['uuid' => $args['uuid']]);
 
             if ($order) {
-                if ($order->getExternalId()) {
+                if ($order->external_id) {
                     return $this->setStatusCancel();
                 }
 
                 // получение пользователя
-                $user = $order->getUser();
+                $user = $order->user;
 
                 $products = [];
 
                 // готовим список товаров
-                foreach ($order->getProducts()->where('external_id', '!=', '') as $product) {
-                    $price = $product->getPrice();
-
-                    if ($this->parameter('TradeMasterPlugin_price_select', 'off') === 'on' && $user) {
-                        $price = $product->getPriceWholesale();
-                    }
-
+                foreach ($order->products->where('external_id', '!=', '') as $product) {
                     $products[] = [
-                        'id' => $product->getExternalId(),
-                        'name' => $product->getTitle(),
-                        'quantity' => $product->getCount(),
-                        'price' => (float) $price * $product->getCount(),
+                        'id' => $product->external_id,
+                        'name' => $product->title,
+                        'quantity' => $product->totalCount(),
+                        'price' => $product->totalSum(),
                     ];
                 }
 
                 // адрес страницы заказа
-                $so = $this->parameter('common_homepage', '') . 'cart/done/' . $order->getUuid()->toString();
+                $so = $this->parameter('common_homepage', '') . 'cart/done/' . $order->uuid;
 
                 $result = $trademaster->api([
                     'method' => 'POST',
@@ -80,15 +74,13 @@ class SendOrderTask extends AbstractTask
                         'shema' => $this->parameter('TradeMasterPlugin_scheme'),
                         'valuta' => $this->parameter('TradeMasterPlugin_currency'),
                         'userID' => $this->parameter('TradeMasterPlugin_user'),
-                        'nameKontakt' => $order->getDelivery()['client'] ?? '',
-                        'adresKontakt' => $order->getDelivery()['address'] ?? '',
-                        'telefonKontakt' => $order->getPhone(),
-                        'other1Kontakt' => $order->getEmail(),
+                        'nameKontakt' => $order->delivery['client'] ?? '',
+                        'adresKontakt' => $order->delivery['address'] ?? '',
+                        'telefonKontakt' => $order->phone,
+                        'other1Kontakt' => $order->email,
                         'other2Kontakt' => !empty($args['passport']) ? $args['passport'] : ($user ? $user->getAdditional() : ''),
-                        'dateDost' => $order
-                            ->getShipping()
-                            ->format('Y-m-d\TH:i:s'),
-                        'komment' => $order->getComment(),
+                        'dateDost' => $order->shipping->format('Y-m-d\TH:i:s'),
+                        'komment' => $order->comment,
                         'tovarJson' => json_encode($products, JSON_UNESCAPED_UNICODE),
                         'idKontakt' => $args['idKontakt'],
                         'nomDoc' => $args['numberDoc'],
@@ -114,8 +106,8 @@ class SendOrderTask extends AbstractTask
                                 // add task send client mail
                                 $task = new \App\Domain\Tasks\SendMailTask($this->container);
                                 $task->execute([
-                                    'to' => $order->getEmail() ? $order->getEmail() : $this->parameter('mail_from', ''),
-                                    'bcc' => $order->getEmail() ? $this->parameter('mail_from', '') : null,
+                                    'to' => $order->email ? $order->email : $this->parameter('mail_from', ''),
+                                    'bcc' => $order->email ? $this->parameter('mail_from', '') : null,
                                     'template' => $this->render($tpl, ['order' => $order]),
                                     'isHtml' => true,
                                 ]);
