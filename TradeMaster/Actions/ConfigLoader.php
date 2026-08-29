@@ -7,25 +7,42 @@ use Plugin\TradeMaster\TradeMasterPlugin;
 
 class ConfigLoader extends AbstractAction
 {
+    /**
+     * Настройки плагина: поле => [endpoint, значение, ключ]
+     */
+    protected const FIELDS = [
+        'scheme' => ['object/getScheme', 'shema', 'idShema'],
+        'storage' => ['object/getStorage', 'nameSklad', 'idSklad'],
+        'checkout' => ['object/moneyOwn', 'naimenovanie', 'idDenSred'],
+        'legal' => ['object/legalsOwn', 'name', 'idUrllico'],
+        'contractor' => ['object/legalsKontr', 'name', 'idUrllico'],
+        'user' => ['object/getLogin', 'login', 'id'],
+    ];
+
     protected function action(): \Slim\Psr7\Response
     {
-        $default = [
-            'key' => ''
-        ];
-        $data = array_merge($default, ($this->request->getParsedBody() ?? []), ($this->request->getQueryParams() ?? []));
+        $data = array_merge(
+            ['key' => ''],
+            (array) ($this->request->getParsedBody() ?? []),
+            $this->request->getQueryParams(),
+        );
 
         /** @var TradeMasterPlugin $tm */
         $tm = $this->container->get('TradeMasterPlugin');
 
-        $array = array_merge(
-            ['scheme' => collect($tm->api(['endpoint' => 'object/getScheme'], $data['key']))->pluck('shema', 'idShema')->all()],
-            ['storage' => collect($tm->api(['endpoint' => 'object/getStorage'], $data['key']))->pluck('nameSklad', 'idSklad')->all()],
-            ['checkout' => collect($tm->api(['endpoint' => 'object/moneyOwn'], $data['key']))->pluck('naimenovanie', 'idDenSred')->all()],
-            ['legal' => collect($tm->api(['endpoint' => 'object/legalsOwn'], $data['key']))->pluck('name', 'idUrllico')->all()],
-            ['contractor' => collect($tm->api(['endpoint' => 'object/legalsKontr'], $data['key']))->pluck('name', 'idUrllico')->all()],
-            ['user' => collect($tm->api(['endpoint' => 'object/getLogin'], $data['key']))->pluck('login', 'id')->all()],
+        // все шесть справочников одним заходом, а не по очереди
+        $responses = $tm->apiBatch(
+            array_map(fn (array $field) => ['endpoint' => $field[0]], static::FIELDS),
+            $data['key'],
+            count(static::FIELDS),
         );
 
-        return $this->respondWithJson($array);
+        $output = [];
+
+        foreach (static::FIELDS as $name => [, $value, $key]) {
+            $output[$name] = collect($responses[$name] ?? [])->pluck($value, $key)->all();
+        }
+
+        return $this->respondWithJson($output);
     }
 }

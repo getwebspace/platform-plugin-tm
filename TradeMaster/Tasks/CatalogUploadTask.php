@@ -3,13 +3,30 @@
 namespace Plugin\TradeMaster\Tasks;
 
 use App\Domain\AbstractTask;
-use App\Domain\Service\Catalog\ProductService as CatalogProductService;
-use Plugin\TradeMaster\TradeMasterPlugin;
+use App\Domain\Casts\Catalog\Status;
+use App\Domain\Models\CatalogProduct;
 use Illuminate\Support\Collection;
+use Plugin\TradeMaster\TradeMasterPlugin;
 
+/**
+ * Pushes the local catalog back into TradeMaster
+ */
 class CatalogUploadTask extends AbstractTask
 {
     public const TITLE = 'Выгрузка каталога ТМ';
+
+    /**
+     * Products per request, and requests in flight at once
+     */
+    protected const PAGE_SIZE = 100;
+    protected const CONCURRENCY = 4;
+
+    /**
+     * Window `only_updated` looks back over
+     */
+    protected const RECENT = '-5 minutes';
+
+    protected TradeMasterPlugin $trademaster;
 
     public function execute(array $params = []): \App\Domain\Models\Task
     {
@@ -21,96 +38,121 @@ class CatalogUploadTask extends AbstractTask
         return parent::execute($params);
     }
 
-    /**
-     * @var TradeMasterPlugin
-     */
-    protected TradeMasterPlugin $trademaster;
-
-    /**
-     * @var CatalogProductService
-     */
-    protected CatalogProductService $productService;
-
     protected function action(array $args = []): void
     {
         $this->trademaster = $this->container->get('TradeMasterPlugin');
-        $this->productService = $this->container->get(CatalogProductService::class);
 
-        $products = $this->productService->read([
-            'export' => 'trademaster',
-            'status' => \App\Domain\Casts\Catalog\Status::WORK,
-        ]);
+        $query = CatalogProduct::query()
+            ->where('export', 'trademaster')
+            ->where('status', Status::WORK)
+            ->with(['files', 'attributes'])
+            ->orderBy('uuid');
 
-        // получение списка недавно обновленных товаров
+        // recently touched products only, filtered by the database rather than by
+        // loading the whole catalog and throwing most of it away
         if ($args['only_updated'] === true) {
-            $now = datetime()->modify('-5 minutes');
-            $products = $products->filter(function (\App\Domain\Models\CatalogProduct $product) use ($now) {
-                return $product->date > $now;
-            });
-
-            $this->logger->info('TradeMaster: upload only updated products', ['count' => $products->count()]);
+            $query->where('date', '>', datetime()->modify(static::RECENT));
         }
 
-        $step = 100;
-        foreach ($products->chunk($step) as $index => $chunk) {
-            $this->setProgress($index, $products->count() / $step);
+        $count = (clone $query)->toBase()->count();
 
-            $xml = $this->getPruductXML($chunk);
-            $response = $this->trademaster->api([
+        if (!$count) {
+            $this->setStatusDone();
+
+            return;
+        }
+
+        $this->logger->info('TradeMaster: upload catalog', ['count' => $count]);
+
+        $done = 0;
+        $requests = [];
+
+        $query->chunk(static::PAGE_SIZE, function (Collection $chunk) use (&$requests, &$done, $count): void {
+            $requests[] = [
                 'method' => 'POST',
                 'endpoint' => 'item/updateTovarSite',
-                'params' => [
-                    'tovarxml' => $xml,
-                ],
-            ]);
+                'params' => ['tovarxml' => $this->xml($chunk)],
+            ];
 
-            $this->logger->info('TradeMaster: upload catalog data', ['response' => $response, 'xml' => $xml]);
+            if (count($requests) >= static::CONCURRENCY) {
+                $this->send($requests);
+                $done += static::CONCURRENCY * static::PAGE_SIZE;
+                $requests = [];
+
+                $this->setProgress($done, $count);
+            }
+        });
+
+        if ($requests) {
+            $this->send($requests);
         }
 
+        $this->setProgress(100);
         $this->setStatusDone();
     }
 
-    protected function getPruductXML(Collection $products)
+    protected function send(array $requests): void
+    {
+        foreach ($this->trademaster->apiBatch($requests, null, static::CONCURRENCY) as $index => $response) {
+            if ($response === null) {
+                $this->logger->warning('TradeMaster: upload chunk failed', ['chunk' => $index]);
+
+                continue;
+            }
+
+            $this->logger->info('TradeMaster: upload catalog data', ['response' => $response]);
+        }
+    }
+
+    protected function xml(Collection $products): string
     {
         $output = '<Attributes>';
 
-        /** @var \App\Domain\Models\CatalogProduct $product */
+        /** @var CatalogProduct $product */
         foreach ($products as $product) {
-            $images = [];
-            foreach ($product->files as $file) {
-                /** @var \App\Domain\Models\File $file */
-                $images[] = $file->filename();
-            }
-            $images = implode(',', $images);
+            $attributes = $product->getRelationValue('attributes');
+            $images = $product->files->map(fn ($file) => $file->filename())->implode(',');
 
-            $output .= '<ProductAttribute idTovar="' . $product->external_id . '">';
+            $output .= '<ProductAttribute idTovar="' . $this->escape($product->external_id) . '">';
             $output .= '<ProductAttributeValue>';
-            $output .= '<name>' . $product->title . '</name>';
-            $output .= '<opisanie>' . $product->description . '</opisanie>';
-            $output .= '<opisanieDop>' . $product->extra . '</opisanieDop>';
-            $output .= '<artikul>' . $product->vendorcode . '</artikul>';
-            $output .= '<strihKod>' . $product->barcode . '</strihKod>';
-            $output .= '<poryadok>' . $product->order . '</poryadok>';
-            $output .= '<foto>' . $images . '</foto>';
-            $output .= '<link>' . $product->address . '</link>';
-            $output .= '<sebestoim>' . $product->priceFirst . '</sebestoim>';
-            $output .= '<price>' . $product->price . '</price>';
-            $output .= '<opt_price>' . $product->priceWholesale . '</opt_price>';
-            $output .= '<kolvo>' . $product->stock . '</kolvo>';
+            $output .= $this->tag('name', $product->title);
+            $output .= $this->tag('opisanie', $product->description);
+            $output .= $this->tag('opisanieDop', $product->extra);
+            $output .= $this->tag('artikul', $product->vendorcode);
+            $output .= $this->tag('strihKod', $product->barcode);
+            $output .= $this->tag('poryadok', $product->order);
+            $output .= $this->tag('foto', $images);
+            $output .= $this->tag('link', $product->address);
+            $output .= $this->tag('sebestoim', $product->priceFirst);
+            $output .= $this->tag('price', $product->price);
+            $output .= $this->tag('opt_price', $product->priceWholesale);
+            $output .= $this->tag('kolvo', $product->stock);
 
-            foreach ($product->attributes()->where('address', 'like', 'field%')->getResults() as $i => $attribute) {
-                $output .= '<ind' . ($i + 1) . '>' . $attribute->value() . '</ind' . ($i + 1) . '>';
+            for ($i = 1; $i <= 4; $i++) {
+                $attribute = $attributes->firstWhere('address', "field{$i}");
+                $output .= $this->tag("ind{$i}", $attribute?->value() ?? '');
             }
 
-            $output .= '<ves>' . $product->weight() . '</ves>';
-            $output .= '<proizv>' . $product->manufacturer . '</proizv>';
-            $output .= '<strana>' . $product->country . '</strana>';
+            $output .= $this->tag('ves', $product->weight());
+            $output .= $this->tag('proizv', $product->manufacturer);
+            $output .= $this->tag('strana', $product->country);
             $output .= '</ProductAttributeValue>';
             $output .= '</ProductAttribute>';
         }
 
-        $output .= '</Attributes>';
+        return $output . '</Attributes>';
+    }
 
-        return trim($output);
+    protected function tag(string $name, mixed $value): string
+    {
+        return '<' . $name . '>' . $this->escape($value) . '</' . $name . '>';
+    }
+
+    /**
+     * Product texts carry `&`, `<` and quotes, unescaped they break the document
+     */
+    protected function escape(mixed $value): string
+    {
+        return htmlspecialchars((string) $value, ENT_QUOTES | ENT_XML1, 'UTF-8');
     }
 }
