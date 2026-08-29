@@ -211,7 +211,6 @@ class DownloadImageTask extends AbstractTask
             $failed = curl_errno($handle) !== 0 || (int) curl_getinfo($handle, CURLINFO_RESPONSE_CODE) !== 200;
 
             curl_multi_remove_handle($multi, $handle);
-            curl_close($handle);
             fclose($stream);
 
             if ($failed || !@filesize($path)) {

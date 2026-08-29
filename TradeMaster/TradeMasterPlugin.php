@@ -399,7 +399,6 @@ class TradeMasterPlugin extends AbstractPlugin
             $code = (int) curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
 
             curl_multi_remove_handle($multi, $handle);
-            curl_close($handle);
 
             // transport error, throttling or a server side hiccup - worth another try
             if ($body === false || $body === null || $code === 0 || $code === 429 || $code >= 500) {
