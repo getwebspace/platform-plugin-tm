@@ -58,7 +58,7 @@ class CatalogDownloadTask extends AbstractTask
         'title', 'address', 'description', 'extra', 'vendorcode', 'barcode',
         'priceFirst', 'price', 'priceWholesale', 'dimension', 'country',
         'manufacturer', 'stock', 'meta', 'category_uuid', 'order', 'status',
-        'external_id', 'export', 'date',
+        'external_id', 'export', 'date', 'tags',
     ];
 
     protected TradeMasterPlugin $trademaster;
@@ -494,6 +494,7 @@ class CatalogDownloadTask extends AbstractTask
                 'external_id' => $id,
                 'export' => 'trademaster',
                 'date' => $now,
+                'tags' => $this->productTags($item['tags'] ?? ''),
             ], static::PRODUCT_COLUMNS);
 
             $row['uuid'] = $uuid;
@@ -759,6 +760,18 @@ class CatalogDownloadTask extends AbstractTask
      * Turn a set of values into the exact database row the model would store,
      * without touching the database
      */
+    /**
+     * Product tags come from TM as a comma separated string ("Хит, Новинка")
+     */
+    protected function productTags(mixed $tags): array
+    {
+        if (!is_array($tags)) {
+            $tags = explode(',', (string) $tags);
+        }
+
+        return array_values(array_filter(array_map(fn ($tag) => trim((string) $tag), $tags), fn ($tag) => $tag !== ''));
+    }
+
     protected function row(Model $model, array $data, array $columns): array
     {
         $model->fill($data);
