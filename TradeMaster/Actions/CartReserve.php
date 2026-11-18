@@ -4,7 +4,11 @@ namespace Plugin\TradeMaster\Actions;
 
 use App\Application\Actions\Common\Catalog\CatalogAction;
 use App\Domain\AbstractTask;
+use App\Application\PubSub;
 use App\Domain\Service\Catalog\Exception\ProductNotFoundException;
+use App\Domain\Service\Catalog\Exception\WrongEmailValueException;
+use App\Domain\Service\Catalog\Exception\WrongPhoneValueException;
+use App\Domain\Tasks\SendMailTask;
 use Plugin\TradeMaster\TradeMasterPlugin;
 use Psr\Container\ContainerInterface;
 
@@ -25,7 +29,7 @@ class CartReserve extends CatalogAction
     protected function action(): \Slim\Psr7\Response
     {
         if (!$this->isRecaptchaChecked()) {
-            return $this->response->withStatus(400, 'Google reCAPTHCA');
+            return $this->response->withStatus(400, 'Google reCAPTCHA');
         }
 
         $data = [
@@ -72,7 +76,7 @@ class CartReserve extends CatalogAction
                 'adresKontakt' => $data['delivery']['address'] ?? '',
                 'telefonKontakt' => $data['phone'],
                 'other1Kontakt' => $data['email'],
-                'other2Kontakt' => $data['passport'] ?: ($data['user'] ? $data['user']->getAdditional() : ''),
+                'other2Kontakt' => $data['passport'] ?: ($data['user']?->additional ?? ''),
                 'dateDost' => $data['shipping'],
                 'komment' => $data['comment'],
                 'tovarJson' => json_encode($this->products($data), JSON_UNESCAPED_UNICODE),
@@ -92,14 +96,21 @@ class CartReserve extends CatalogAction
             return $this->respondWithJson(['exception' => $result]);
         }
 
-        $order = $this->catalogOrderService->create(array_merge($data, [
-            'external_id' => $number,
-            'export' => 'trademaster',
-        ]));
+        try {
+            $order = $this->catalogOrderService->create(array_merge($data, [
+                'user_uuid' => $data['user']?->uuid,
+                'external_id' => $number,
+                'export' => 'trademaster',
+            ]));
+        } catch (WrongEmailValueException|WrongPhoneValueException $e) {
+            return $this->respondWithJson(['error' => $e->getMessage()]);
+        }
+
+        $this->container->get(PubSub::class)->publish('common:catalog:order:create', $order);
 
         // письмо клиенту и админу
         if (($tpl = $this->parameter('TradeMasterPlugin_mail_client_template', '')) !== '') {
-            $task = new \App\Domain\Tasks\SendMailTask($this->container);
+            $task = new SendMailTask($this->container);
             $task->execute([
                 'to' => $order->email ?: $this->parameter('mail_from', ''),
                 'bcc' => $order->email ? $this->parameter('mail_from', '') : null,
@@ -110,14 +121,16 @@ class CartReserve extends CatalogAction
             AbstractTask::worker($task);
         }
 
+        $url = '/cart/done/' . $order->uuid;
+
         if (
-            (empty($_SERVER['HTTP_X_REQUESTED_WITH']) || $_SERVER['HTTP_X_REQUESTED_WITH'] !== 'XMLHttpRequest')
-            && !empty($_SERVER['HTTP_REFERER'])
+            $this->getServerParam('HTTP_X_REQUESTED_WITH') !== 'XMLHttpRequest'
+            && $this->getServerParam('HTTP_REFERER')
         ) {
-            $this->response = $this->response->withHeader('Location', '/cart/done/' . $order->uuid)->withStatus(301);
+            $this->response = $this->response->withHeader('Location', $url)->withStatus(301);
         }
 
-        return $this->respondWithJson(['redirect' => '/cart/done/' . $order->uuid]);
+        return $this->respondWithJson(['redirect' => $url]);
     }
 
     /**
