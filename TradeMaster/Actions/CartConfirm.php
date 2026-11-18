@@ -4,22 +4,22 @@ namespace Plugin\TradeMaster\Actions;
 
 use App\Domain\AbstractAction;
 use App\Domain\AbstractTask;
+use App\Domain\Tasks\SendMailTask;
 use Plugin\TradeMaster\TradeMasterPlugin;
 
 class CartConfirm extends AbstractAction
 {
     protected function action(): \Slim\Psr7\Response
     {
-        $data = array_merge(
-            ['nomer' => '', 'user' => false, 'products' => []],
-            $this->request->getQueryParams(),
-        );
+        /** @var \App\Domain\Models\User|false $user */
+        $user = $this->request->getAttribute('user', false);
+        $data = [
+            'nomer' => (string) $this->getQueryParam('nomer', ''),
+            'user' => $user,
+            'products' => [],
+        ];
 
-        if (($user = $this->request->getAttribute('user', false)) !== false) {
-            $data['user'] = $user;
-        }
-
-        if (!$data['nomer'] || !$data['user']) {
+        if ($data['nomer'] === '' || !$user) {
             return $this->respondWithJson(['0']);
         }
 
@@ -33,20 +33,14 @@ class CartConfirm extends AbstractAction
 
         $tpl = $this->parameter('TradeMasterPlugin_mail_order_template', '');
 
-        if (!$data['products'] || !$data['user']->getEmail() || $tpl === '') {
+        if (!$data['products'] || !$user->email || $tpl === '') {
             return $this->respondWithJson(['0']);
         }
 
-        $renderer = $this->container->get('view');
-
-        if (($path = realpath(THEME_DIR . '/' . $this->parameter('common_theme', 'default'))) !== false) {
-            $renderer->getLoader()->addPath($path);
-        }
-
         // письмо клиенту и админу
-        $task = new \App\Domain\Tasks\SendMailTask($this->container);
+        $task = new SendMailTask($this->container);
         $task->execute([
-            'to' => $data['user']->getEmail(),
+            'to' => $user->email,
             'bcc' => $this->parameter('mail_from', ''),
             'template' => $this->render($tpl, $data),
             'isHtml' => true,
