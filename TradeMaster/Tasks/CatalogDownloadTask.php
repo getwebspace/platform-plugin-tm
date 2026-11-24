@@ -54,6 +54,8 @@ class CatalogDownloadTask extends AbstractTask
         'meta', 'template', 'order', 'specifics', 'status', 'external_id', 'export',
     ];
 
+    // only these columns are written on a sync: what a shop owner keeps by hand
+    // (variant_title, stock_status_uuid, ...) is never overwritten, so do not add them here
     protected const PRODUCT_COLUMNS = [
         'title', 'address', 'description', 'extra', 'vendorcode', 'barcode',
         'priceFirst', 'price', 'priceWholesale', 'dimension', 'country',
