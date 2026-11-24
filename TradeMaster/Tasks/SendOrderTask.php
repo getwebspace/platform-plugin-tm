@@ -80,7 +80,7 @@ class SendOrderTask extends AbstractTask
                 'nomerStr' => $args['numberDocStr'],
                 'nalich' => 0,
                 // order page address
-                'so' => $this->parameter('common_homepage', '') . 'cart/done/' . $order->uuid,
+                'so' => $this->orderPage($order),
             ],
         ]);
 
@@ -112,5 +112,24 @@ class SendOrderTask extends AbstractTask
         }
 
         return $this->setStatusDone($output);
+    }
+
+    /**
+     * Address of the page of the order: the site address ("https://shop.com", no slash at the end,
+     * the scheme added when it was typed without one) and the path, never "https://shop.comcart/..."
+     */
+    private function orderPage(CatalogOrder $order): string
+    {
+        $site = trim((string) $this->parameter('common_homepage', ''));
+
+        if ($site === '') {
+            return '';
+        }
+
+        if (!preg_match('#^https?://#i', $site)) {
+            $site = 'https://' . ltrim($site, '/');
+        }
+
+        return rtrim($site, '/') . '/cart/done/' . $order->uuid;
     }
 }
