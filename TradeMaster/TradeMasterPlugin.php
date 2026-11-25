@@ -19,7 +19,7 @@ class TradeMasterPlugin extends AbstractPlugin
     const DESCRIPTION = 'Плагин реализует функционал интеграции с системой торгово-складского учета.';
     const AUTHOR = 'Aleksey Ilyin';
     const AUTHOR_SITE = 'https://u4et.ru/trademaster';
-    const VERSION = '10.0.1';
+    const VERSION = '10.1.0';
 
     /**
      * Seconds to wait for a connection and for a whole API response
@@ -186,6 +186,26 @@ class TradeMasterPlugin extends AbstractPlugin
             ],
         ]);
 
+        $this->addSettingsField([
+            'label' => 'Дни автоматической синхронизации',
+            'description' => 'Если ни один день не выбран, синхронизация только вручную',
+            'type' => 'text',
+            'name' => 'sync_days',
+            'args' => ['placeholder' => '1,3,5 (1 — понедельник, 7 — воскресенье)'],
+        ]);
+        $this->addSettingsField([
+            'label' => 'Время автоматической синхронизации',
+            'description' => 'По часам сервера (TZ)',
+            'type' => 'time',
+            'name' => 'sync_time',
+            'args' => ['value' => '03:00'],
+        ]);
+
+        // a run missed because of a restart is made up for once
+        if (($cron = $this->cron()) !== null) {
+            $this->addSchedule(TradeMasterSchedule::class, $cron, 'trademaster', true);
+        }
+
         // TM API proxy
         $this
             ->map([
@@ -286,6 +306,22 @@ class TradeMasterPlugin extends AbstractPlugin
                 ],
             ]);
         }
+    }
+
+    /**
+     * "30 3 * * 1,3,5", null when no day is chosen
+     */
+    public function cron(): ?string
+    {
+        preg_match_all('~[1-7]~', (string) $this->parameter('TradeMasterPlugin_sync_days', ''), $days);
+
+        if (!$days[0]) {
+            return null;
+        }
+
+        preg_match('~^(\d{1,2}):(\d{2})~', (string) $this->parameter('TradeMasterPlugin_sync_time', '03:00'), $m);
+
+        return sprintf('%d %d * * %s', $m[2] ?? 0, $m[1] ?? 3, implode(',', array_unique($days[0])));
     }
 
     public function isConfigured(): bool

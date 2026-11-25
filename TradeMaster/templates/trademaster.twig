@@ -67,3 +67,29 @@
         });
     }
 </script>
+
+<script>
+    if (location.pathname === '/cup/parameters') {
+        // days of the week instead of the "1,3,5" text field
+        document.addEventListener('DOMContentLoaded', () => {
+            const input = document.querySelector('[name="TradeMasterPlugin[sync_days]"]');
+            if (!input) return;
+            const chosen = new Set(input.value.match(/[1-7]/g) || []);
+            const box = document.createElement('div');
+            ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].forEach((title, i) => {
+                const day = String(i + 1), label = document.createElement('label'), check = document.createElement('input');
+                check.type = 'checkbox';
+                check.checked = chosen.has(day);
+                check.addEventListener('change', () => {
+                    chosen[check.checked ? 'add' : 'delete'](day);
+                    input.value = [...chosen].sort().join(',');
+                });
+                label.className = 'mr-3';
+                label.append(check, ' ' + title);
+                box.append(label);
+            });
+            input.type = 'hidden';
+            input.after(box);
+        });
+    }
+</script>
