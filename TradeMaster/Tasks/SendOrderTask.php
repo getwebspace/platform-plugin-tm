@@ -60,6 +60,13 @@ class SendOrderTask extends AbstractTask
             ];
         }
 
+        // TradeMaster gives a number to an empty order but keeps no document: it looks sent and is not
+        if (!$products) {
+            $this->logger->warning('TradeMaster: order not sent, no product has a TradeMaster id', ['uuid' => $order->uuid]);
+
+            return $this->setStatusFail('No product of the order is known to TradeMaster');
+        }
+
         $result = $trademaster->api([
             'method' => 'POST',
             'endpoint' => 'order/cart/anonym',
