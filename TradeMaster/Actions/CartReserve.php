@@ -61,6 +61,9 @@ class CartReserve extends CatalogAction
             $data['delivery']['address'] = implode(', ', $data['delivery']['address']);
         }
 
+        // another plugin may bring products TradeMaster does not know yet (gives them an id)
+        $this->container->get(PubSub::class)->publish('tm:cart:before-reserve', array_keys((array) $data['products']));
+
         $result = $this->trademaster->api([
             'method' => 'POST',
             'endpoint' => $this->endpoint($data['type'], $data['numberDoc']),

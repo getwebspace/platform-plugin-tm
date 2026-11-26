@@ -44,6 +44,10 @@ class SendOrderTask extends AbstractTask
             return $this->setStatusCancel('Order already sent');
         }
 
+        // another plugin may bring products TradeMaster does not know yet (gives them an id)
+        $this->container->get(\App\Application\PubSub::class)->publish('tm:order:before-send', $order);
+        $order->load('products');
+
         $user = $order->user;
         $products = [];
 
